@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Runs in the session's tmux pane: clones the repo on first launch, then starts Claude
+# Code as /session/.ccm/launch.json says (new, continue or resume a conversation).
+# When Claude exits the pane drops to a shell, so nothing on screen is lost.
+set -u
+
+repo="${CCM_REPO_DIR:?}"
+bold=$'\e[1m'; dim=$'\e[2m'; red=$'\e[31m'; reset=$'\e[0m'
+
+fallback() {
+	echo
+	echo "${dim}── Claude exited${1:+ ($1)}. Run ${reset}${bold}claude --continue${reset}${dim} to pick up again, or use Restart in cc·modern.${reset}"
+	exec bash -l
+}
+
+if [ ! -e "$repo/.git" ]; then
+	echo "${dim}Cloning ${reset}${bold}${CCM_REPO_URL}${reset}${dim}${CCM_BASE_BRANCH:+ (branch $CCM_BASE_BRANCH)}…${reset}"
+	args=(clone --progress)
+	[ -n "${CCM_BASE_BRANCH:-}" ] && args+=(--branch "$CCM_BASE_BRANCH")
+	if ! git "${args[@]}" "$CCM_REPO_URL" "$repo"; then
+		echo "${red}Clone failed.${reset} Check the URL and the GitHub account's access, then use Restart."
+		fallback "clone failed"
+	fi
+	if [ -n "${CCM_NEW_BRANCH:-}" ]; then
+		git -C "$repo" switch -c "$CCM_NEW_BRANCH" || git -C "$repo" switch "$CCM_NEW_BRANCH"
+	fi
+	echo
+fi
+
+cd "$repo" || fallback "no repo"
+node /usr/local/lib/ccm/seed.mjs "$repo" || true
+
+mapfile -d '' claude_args < <(node /usr/local/lib/ccm/args.mjs)
+# Job control gives Claude the terminal's foreground process group: tmux then reports it
+# as the pane's command, and Ctrl+C reaches Claude without ending this script.
+set -m
+claude "${claude_args[@]}"
+fallback "status $?"

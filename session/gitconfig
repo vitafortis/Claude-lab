@@ -1,0 +1,10 @@
+# System git config for session containers. Pushes and private clones authenticate with
+# the session's GitHub account (GH_TOKEN, set by cc·modern); gh reads the same variable.
+[credential "https://github.com"]
+	helper = "!f() { test \"$1\" = get && test -n \"$GH_TOKEN\" && echo username=x-access-token && echo \"password=$GH_TOKEN\"; }; f"
+[init]
+	defaultBranch = main
+[pull]
+	rebase = false
+[safe]
+	directory = *

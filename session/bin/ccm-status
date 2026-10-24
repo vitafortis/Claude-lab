@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# One cheap probe for cc·modern's live view, sections separated by ASCII record separators:
+# the pane's foreground command, the last screen lines, and (with --git) git status.
+set -u
+rs=$'\x1e'
+tmux display-message -p -t main '#{pane_current_command}' 2>/dev/null
+printf '%s\n' "$rs"
+tmux capture-pane -p -J -t main -S -60 2>/dev/null
+if [ "${1:-}" = "--git" ] && [ -e "${CCM_REPO_DIR:-/nonexistent}/.git" ]; then
+	printf '%s\n' "$rs"
+	git -C "$CCM_REPO_DIR" status --porcelain=v2 --branch 2>/dev/null
+	printf '%s\n' "$rs"
+	git -C "$CCM_REPO_DIR" diff --shortstat HEAD 2>/dev/null
+fi
+exit 0

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Runs in the sign-in container's tmux pane: a claude.ai login whose credentials land in
+# the account's config folder (CLAUDE_CONFIG_DIR), shared by that account's sessions.
+set -u
+dim=$'\e[2m'; reset=$'\e[0m'
+node /usr/local/lib/ccm/seed.mjs || true
+echo "${dim}Signing in to Claude. Open the link below, approve, and paste the code back here.${reset}"
+echo
+claude auth login
+echo
+claude auth status --text
+echo
+echo "${dim}Done? Close this window in cc·modern. To try again, run ${reset}claude auth login"
+exec bash -l

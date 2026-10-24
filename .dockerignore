@@ -1,0 +1,12 @@
+node_modules
+build
+.svelte-kit
+data
+session
+docs
+.env
+.env.*
+!.env.example
+.git
+tests
+scripts

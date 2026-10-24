@@ -1,0 +1,22 @@
+node_modules
+
+# Output
+.output
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Local app data (store, key file, session workspaces)
+/data

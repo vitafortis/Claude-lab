@@ -1,0 +1,22 @@
+# Build both images from this checkout instead of pulling them:
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# Handy for adding tools to the session image (edit session/Dockerfile) or running
+# without access to ghcr.io.
+services:
+  cc-modern:
+    image: cc-modern:local
+    build: .
+    environment:
+      CCM_SESSION_IMAGE: cc-modern-session:local
+    depends_on:
+      session-image:
+        condition: service_completed_successfully
+
+  # Builds the session image; cc·modern starts the actual session containers from it.
+  session-image:
+    image: cc-modern-session:local
+    build: ./session
+    entrypoint: ["true"]
+    restart: "no"
