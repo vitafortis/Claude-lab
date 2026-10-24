@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { CornerDownLeft, KeyRound, LayoutDashboard, Moon, Plus, Search, Settings, TerminalSquare } from '@lucide/svelte';
+	import { CornerDownLeft, KeyRound, LayoutDashboard, Moon, Plus, Search, Settings, TerminalSquare, Wand, Workflow } from '@lucide/svelte';
 	import StateDot from './StateDot.svelte';
 	import { sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
 	import { displayState, sortForOverview, type DisplayState } from '#lib/session-state.ts';
@@ -23,6 +23,8 @@
 			run: () => goto(`/s/${s.id}`)
 		})),
 		{ id: 'new', label: 'New session', icon: Plus, run: () => goto('/new') },
+		{ id: 'review', label: 'Review a pull request', hint: '/code-review', icon: Wand, run: () => goto('/new?mode=skill&command=/code-review') },
+		{ id: 'automations', label: 'Automations', hint: 'Linear', icon: Workflow, run: () => goto('/automations') },
 		{ id: 'home', label: 'All sessions', icon: LayoutDashboard, run: () => goto('/') },
 		{ id: 'accounts', label: 'Accounts', hint: 'Claude and GitHub', icon: KeyRound, run: () => goto('/accounts') },
 		{ id: 'settings', label: 'Settings', icon: Settings, run: () => goto('/settings') },

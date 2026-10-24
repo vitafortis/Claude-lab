@@ -27,6 +27,7 @@ import {
 	getGitIdentity,
 	getGithubAccount,
 	getGithubToken,
+	containerNamesInUse,
 	getSession,
 	getSettings,
 	listSessions,
@@ -44,8 +45,26 @@ export const LABELS = {
 	account: 'cc-modern.account'
 } as const;
 
-export const containerName = (s: Pick<Session, 'id' | 'name'>) => `ccm-${slugify(s.name, 30)}-${s.id.slice(0, 8)}`;
 export const workdir = (s: Pick<Session, 'repoDir'>) => `/workspace/${s.repoDir}`;
+
+/**
+ * Removes a container by name only if it's one of ours: names like claude-<repo> could
+ * belong to something else on the host.
+ */
+export async function removeOwned(name: string) {
+	const info = await inspectContainer(name);
+	if (info && info.Config.Labels?.[LABELS.instance] === config.instance) await removeContainer(info.Id);
+}
+
+/** claude-<repo>, or claude-<repo>-2, -3… when that name is taken (by a session or any container). */
+export async function allocateContainerName(repoDir: string): Promise<string> {
+	const base = `claude-${slugify(repoDir, 48)}`;
+	const taken = containerNamesInUse();
+	for (let n = 1; ; n++) {
+		const name = n === 1 ? base : `${base}-${n}`;
+		if (!taken.has(name) && !(await inspectContainer(name))) return name;
+	}
+}
 
 let pulling: Promise<void> | null = null;
 
@@ -74,15 +93,19 @@ export function claudeEnv(accountId: string): string[] {
 	return [];
 }
 
+// Without a GitHub account git has no identity, and every commit would fail.
+const FALLBACK_IDENTITY = { name: 'Claude', email: 'noreply@anthropic.com' };
+
 function githubEnv(accountId: string | null): string[] {
-	if (!accountId || !getGithubAccount(accountId)) return [];
-	const token = getGithubToken(accountId);
-	const who = getGitIdentity(accountId);
+	const account = accountId && getGithubAccount(accountId) ? accountId : null;
+	const token = account ? getGithubToken(account) : undefined;
+	const who = (account && getGitIdentity(account)) || FALLBACK_IDENTITY;
 	return [
 		...(token ? [`GH_TOKEN=${token}`] : []),
-		...(who
-			? [`GIT_AUTHOR_NAME=${who.name}`, `GIT_AUTHOR_EMAIL=${who.email}`, `GIT_COMMITTER_NAME=${who.name}`, `GIT_COMMITTER_EMAIL=${who.email}`]
-			: [])
+		`GIT_AUTHOR_NAME=${who.name}`,
+		`GIT_AUTHOR_EMAIL=${who.email}`,
+		`GIT_COMMITTER_NAME=${who.name}`,
+		`GIT_COMMITTER_EMAIL=${who.email}`
 	];
 }
 
@@ -114,6 +137,7 @@ function containerSpec(s: Session, settings: Settings, mounts: Record<string, un
 		`CCM_REPO_DIR=${workdir(s)}`,
 		...(s.baseBranch ? [`CCM_BASE_BRANCH=${s.baseBranch}`] : []),
 		...(s.newBranch ? [`CCM_NEW_BRANCH=${s.newBranch}`] : []),
+		...(s.checkoutPr ? [`CCM_PR_NUMBER=${s.checkoutPr}`] : []),
 		...(s.permissionMode === 'bypassPermissions' ? ['CCM_BYPASS_PERMISSIONS=1'] : []),
 		...parseEnvLines(settings.extraEnv),
 		...claudeEnv(s.claudeAccountId),
@@ -121,7 +145,7 @@ function containerSpec(s: Session, settings: Settings, mounts: Record<string, un
 	];
 	return {
 		Image: settings.sessionImage,
-		Hostname: slugify(s.name, 50),
+		Hostname: s.containerName,
 		Env: env,
 		WorkingDir: workdir(s),
 		Labels: {
@@ -159,8 +183,8 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 		ensureDirs(accountRel(s.claudeAccountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.ccm`);
 		await ensureImage(settings.sessionImage);
 		writeLaunch(s, launch ?? defaultLaunch(s));
-		const name = containerName(s);
-		await removeContainer(name);
+		const name = s.containerName;
+		await removeOwned(name);
 		const mounts = [
 			mountSpec(b, accountRel(s.claudeAccountId), '/claude'),
 			mountSpec(b, sessionRel(id), '/session'),
@@ -181,9 +205,11 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 export async function stopSession(id: string): Promise<Session> {
 	const s = getSession(id);
 	if (!s) throw new NotFound('Session not found');
-	const target = s.containerId ?? containerName(s);
-	await stopContainer(target, 10);
-	await removeContainer(target);
+	if (s.containerId) {
+		await stopContainer(s.containerId, 10);
+		await removeContainer(s.containerId);
+	}
+	await removeOwned(s.containerName);
 	setSessionState(id, { status: 'stopped', containerId: null, error: null, stopped: true });
 	return getSession(id)!;
 }
@@ -220,8 +246,8 @@ export async function sendToSession(id: string, input: { text?: string; keys?: s
 export async function deleteSession(id: string) {
 	const s = getSession(id);
 	if (!s) throw new NotFound('Session not found');
-	await removeContainer(s.containerId ?? containerName(s));
-	await removeContainer(containerName(s));
+	if (s.containerId) await removeContainer(s.containerId);
+	await removeOwned(s.containerName);
 	rmSync(join(config.sessionsDir, sessionRel(id)), { recursive: true, force: true });
 	rmSync(conversationsDir(s.claudeAccountId, id), { recursive: true, force: true });
 	deleteSessionRow(id);
@@ -241,12 +267,19 @@ export async function reconcile() {
 			if (s.status !== 'running' || s.containerId !== c.Id) setSessionState(s.id, { status: 'running', containerId: c.Id });
 			continue;
 		}
-		if (c) {
+		// The listing can be stale: a start may have finished since. Look again before acting.
+		const id = c?.Id ?? s.containerId;
+		const info = id ? await inspectContainer(id) : null;
+		if (info?.State.Running) {
+			if (s.status !== 'running' || s.containerId !== info.Id) setSessionState(s.id, { status: 'running', containerId: info.Id });
+			continue;
+		}
+		if (info?.State.Status === 'created') continue;
+		if (info) {
 			// Exited by itself: keep the reason when it failed, then clean up.
-			const info = await inspectContainer(c.Id);
-			const code = info?.State.ExitCode ?? 0;
-			const logs = code !== 0 ? await containerLogs(c.Id, 20).catch(() => '') : '';
-			await removeContainer(c.Id);
+			const code = info.State.ExitCode ?? 0;
+			const logs = code !== 0 ? await containerLogs(info.Id, 20).catch(() => '') : '';
+			await removeContainer(info.Id);
 			setSessionState(s.id, {
 				status: code === 0 ? 'stopped' : 'error',
 				containerId: null,

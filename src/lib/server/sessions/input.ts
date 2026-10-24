@@ -24,6 +24,9 @@ export function parseName(v: unknown): string {
 	return name;
 }
 
+// A slash command or skill: /code-review, /security-review, /my-plugin:skill…
+const COMMAND = /^\/[A-Za-z0-9][A-Za-z0-9:_.-]{0,80}$/;
+
 export function parseSessionInput(b: Record<string, unknown>): SessionInput & { repoDir: string } {
 	const repo = parseRepo(str(b, 'repo', { required: true }) ?? '');
 	if (!repo) throw new BadRequest('Enter a GitHub repository (owner/name) or an https git URL');
@@ -33,12 +36,32 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 	const githubAccountId = str(b, 'githubAccountId');
 	if (githubAccountId && !getGithubAccount(githubAccountId)) throw new BadRequest('That GitHub account no longer exists');
 
+	const kind = b.kind === 'skill' ? 'skill' : 'task';
+	let skill: string | null = null;
+	if (kind === 'skill') {
+		const command = str(b, 'command', { required: true, max: 82 })!;
+		if (!COMMAND.test(command)) throw new BadRequest('A skill or command starts with "/", e.g. /code-review');
+		const args = (str(b, 'args', { max: 2000 }) ?? '').replace(/\s+/g, ' ');
+		skill = args ? `${command} ${args}` : command;
+	}
+
+	let checkoutPr: number | null = null;
+	if (b.checkoutPr !== undefined && b.checkoutPr !== null && b.checkoutPr !== '') {
+		checkoutPr = Number(b.checkoutPr);
+		if (!Number.isInteger(checkoutPr) || checkoutPr < 1) throw new BadRequest('Pull request must be a number');
+		if (!repo.fullName) throw new BadRequest('Pull requests can only be checked out from GitHub repositories');
+	}
+
 	const baseBranch = str(b, 'baseBranch', { max: 200 });
 	const newBranch = str(b, 'newBranch', { max: 200 });
 	for (const br of [baseBranch, newBranch]) if (br && !isValidBranch(br)) throw new BadRequest(`"${br}" isn't a valid branch name`);
 
+	const defaultName = skill ? `${repo.dir} ${skill.split(' ')[0].slice(1)}${checkoutPr ? ` #${checkoutPr}` : ''}` : repo.dir;
 	return {
-		name: parseName(b.name ?? repo.dir),
+		name: parseName(b.name ?? defaultName),
+		kind,
+		skill,
+		checkoutPr,
 		repoUrl: repo.url,
 		repoFullName: repo.fullName,
 		repoDir: repo.dir,
@@ -49,7 +72,8 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 		model: parseModel(b.model),
 		permissionMode: parsePermissionMode(b.permissionMode),
 		remoteControl: b.remoteControl !== false,
-		prompt: str(b, 'prompt', { max: 20_000 })
+		// A skill session's first message is the command itself.
+		prompt: skill ?? str(b, 'prompt', { max: 20_000 })
 	};
 }
 

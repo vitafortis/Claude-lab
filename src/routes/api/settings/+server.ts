@@ -22,6 +22,16 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 	const network = typeof b.network === 'string' ? b.network.trim() : '';
 	if (network && !NETWORK.test(network)) throw new BadRequest('That doesn’t look like a Docker network name');
 	const extraEnv = typeof b.extraEnv === 'string' ? b.extraEnv.slice(0, 20_000) : '';
+	let publicUrl = typeof b.publicUrl === 'string' ? b.publicUrl.trim().replace(/\/+$/, '') : '';
+	if (publicUrl) {
+		try {
+			const u = new URL(publicUrl);
+			if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error();
+			publicUrl = u.origin + u.pathname.replace(/\/+$/, '');
+		} catch {
+			throw new BadRequest('The public URL must start with http:// or https://');
+		}
+	}
 	saveSettings({
 		sessionImage,
 		network,
@@ -30,7 +40,8 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 		defaultModel: parseModel(b.defaultModel) ?? '',
 		defaultPermissionMode: parsePermissionMode(b.defaultPermissionMode),
 		defaultRemoteControl: b.defaultRemoteControl !== false,
-		extraEnv
+		extraEnv,
+		publicUrl
 	});
 	return json({ settings: getSettings() });
 });

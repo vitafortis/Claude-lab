@@ -50,5 +50,7 @@ export const config = {
 	/** Our own container (name or id), when the hostname isn't it. */
 	selfContainer: process.env.CCM_SELF_CONTAINER?.trim() || undefined,
 	/** A GitHub OAuth app (device flow enabled) for "Sign in with GitHub"; PATs work without it. */
-	githubClientId: process.env.CCM_GITHUB_CLIENT_ID?.trim() || undefined
+	githubClientId: process.env.CCM_GITHUB_CLIENT_ID?.trim() || undefined,
+	/** Linear's GraphQL endpoint (override for testing against a mock). */
+	linearApiUrl: process.env.CCM_LINEAR_API_URL?.trim() || 'https://api.linear.app/graphql'
 };

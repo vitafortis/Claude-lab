@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Check, GitBranch, KeyRound, Play, Plus, TerminalSquare, Trash2 } from '@lucide/svelte';
+	import { Check, GitBranch, KeyRound, Play, Plus, TerminalSquare, Trash2, Wand } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import SessionCard from '#lib/components/SessionCard.svelte';
 	import StateDot from '#lib/components/StateDot.svelte';
@@ -38,6 +38,7 @@
 <div class="h-full overflow-y-auto">
 	<PageHeader title="Sessions" {description}>
 		{#snippet actions()}
+			<a href="/new?mode=skill&command=/code-review" class="btn btn-secondary" title="Start a session that runs /code-review on a pull request"><Wand />Review a PR</a>
 			<a href="/new" class="btn btn-primary"><Plus />New session</a>
 		{/snippet}
 	</PageHeader>

@@ -8,11 +8,11 @@ import { rmSync } from 'node:fs';
 import { config } from './config.ts';
 import { containerLogs, createContainer, exec, inspectContainer, listContainers, removeContainer, startContainer, waitContainer } from './docker.ts';
 import { getClaudeAccount, getSettings, setClaudeAuthStatus } from './store.ts';
-import { claudeEnv, ensureImage, LABELS, parseEnvLines } from './sessions/runtime.ts';
+import { claudeEnv, ensureImage, LABELS, parseEnvLines, removeOwned } from './sessions/runtime.ts';
 import { abs, accountRel, backing, ensureDirs, mountSpec } from './sessions/storage.ts';
 import type { ClaudeAccount } from '#lib/types.ts';
 
-const loginName = (accountId: string) => `ccm-login-${accountId.slice(0, 8)}`;
+const loginName = (accountId: string) => `claude-login-${accountId.slice(0, 8)}`;
 
 async function baseSpec(accountId: string, extra: { env?: string[]; cmd?: string[]; kind: string }) {
 	const settings = getSettings();
@@ -35,7 +35,7 @@ async function baseSpec(accountId: string, extra: { env?: string[]; cmd?: string
 /** Starts (or restarts) the sign-in container; its terminal is at /ws/accounts/<id>/login. */
 export async function startLogin(accountId: string): Promise<string> {
 	const name = loginName(accountId);
-	await removeContainer(name);
+	await removeOwned(name);
 	const id = await createContainer(name, await baseSpec(accountId, { kind: 'login', env: ['CCM_PANE_CMD=ccm-login'] }));
 	await startContainer(id);
 	return id;
@@ -43,11 +43,11 @@ export async function startLogin(accountId: string): Promise<string> {
 
 export async function loginContainer(accountId: string): Promise<string | null> {
 	const info = await inspectContainer(loginName(accountId));
-	return info?.State.Running ? info.Id : null;
+	return info?.State.Running && info.Config.Labels?.[LABELS.instance] === config.instance ? info.Id : null;
 }
 
 export async function stopLogin(accountId: string) {
-	await removeContainer(loginName(accountId));
+	await removeOwned(loginName(accountId));
 }
 
 /** Reads `claude auth status` JSON: {loggedIn, authMethod, email?, subscriptionType?, …}. */
@@ -91,7 +91,7 @@ export async function loginUrl(accountId: string): Promise<string | null> {
 /** Runs `claude auth status` for an account in a throwaway container and saves the result. */
 export async function checkAccount(accountId: string): Promise<ClaudeAccount> {
 	if (!getClaudeAccount(accountId)) throw new Error('Account not found');
-	const id = await createContainer(`ccm-check-${accountId.slice(0, 8)}-${Date.now().toString(36)}`, await baseSpec(accountId, { kind: 'check', cmd: ['claude', 'auth', 'status'] }));
+	const id = await createContainer(`claude-check-${accountId.slice(0, 8)}-${Date.now().toString(36)}`, await baseSpec(accountId, { kind: 'check', cmd: ['claude', 'auth', 'status'] }));
 	try {
 		await startContainer(id);
 		const code = await waitContainer(id, 60_000);

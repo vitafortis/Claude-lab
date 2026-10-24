@@ -23,21 +23,24 @@
 		Square,
 		SquareTerminal,
 		TerminalSquare,
-		Trash2
+		Trash2,
+		Wand
 	} from '@lucide/svelte';
 	import Conversations from '#lib/components/Conversations.svelte';
+	import Dialog from '#lib/components/Dialog.svelte';
 	import Menu from '#lib/components/Menu.svelte';
 	import StateBadge from '#lib/components/StateBadge.svelte';
+	import SessionTags from '#lib/components/SessionTags.svelte';
 	import StateDot from '#lib/components/StateDot.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago } from '#lib/client/format.ts';
-	import { deleteSession, relaunchClaude, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
+	import { deleteSession, relaunchClaude, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
 	import { sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
 	import { displayState } from '#lib/session-state.ts';
-	import { CLAUDE_AUTH_LABEL, PERMISSION_MODES, type Conversation, type Session } from '#lib/types.ts';
+	import { CLAUDE_AUTH_LABEL, PERMISSION_MODES, type Conversation, type Session, type SkillOption } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -58,6 +61,30 @@
 	let showKeys = $state(false);
 	let busy = $state(false);
 	let summarizing = $state(false);
+
+	// "Run a skill" types the command into Claude's prompt.
+	let skillOpen = $state(false);
+	let skills = $state<SkillOption[]>([]);
+	let skillCommand = $state('/code-review');
+	let skillArgs = $state('');
+
+	async function openSkill() {
+		skillOpen = true;
+		skills = await api.get<SkillOption[]>(`/api/skills?account=${s.claudeAccountId}`).catch(() => []);
+	}
+
+	async function runSkill(e: SubmitEvent) {
+		e.preventDefault();
+		const line = `${skillCommand.trim()} ${skillArgs.trim()}`.trim();
+		if (!line.startsWith('/')) return;
+		if (await sendToSession(s, { text: line, enter: true })) {
+			skillOpen = false;
+			skillArgs = '';
+			toast('success', `Sent ${line}`);
+		}
+	}
+
+	const attachCommand = $derived(`docker exec -it -u node ${s.containerName} tmux attach -t main`);
 
 	$effect(() => {
 		// Narrow screens start with the panel closed and the key bar open.
@@ -126,6 +153,7 @@
 	}
 
 	const restartItems = $derived([
+		...(running ? [{ label: 'Run a skill…', hint: 'Type a skill or command into Claude', icon: Wand, onclick: openSkill }, 'separator' as const] : []),
 		{ label: 'Continue newest conversation', hint: 'Restart Claude and pick up where it left off', icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
 		{ label: 'New conversation', hint: 'Fresh context, same repo and branch', icon: FilePlus2, onclick: () => launch({ mode: 'new' }) },
 		'separator' as const,
@@ -149,6 +177,7 @@
 				{/if}
 			</p>
 		</div>
+		<span class="max-md:hidden"><SessionTags session={s} /></span>
 		<span class="max-sm:hidden"><StateBadge state={view} /></span>
 
 		{#if running}
@@ -319,11 +348,45 @@
 						<Switch checked={rcAvailable && s.remoteControl} disabled={!rcAvailable} label="Remote Control" onchange={(v) => patch({ remoteControl: v })} />
 					</div>
 					<p class="text-xs text-muted-foreground">Changes apply the next time Claude starts (Session → Continue newest conversation).</p>
-					<button class="flex items-center gap-1.5 font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy the container's working directory" onclick={() => copyText(`/workspace/${s.repoDir}`)}>
-						<Copy class="size-3" />/workspace/{s.repoDir}
-					</button>
+					<div class="space-y-1.5 rounded-lg border border-border bg-background p-2.5">
+						<p class="flex items-center justify-between text-xs">
+							<span class="text-muted-foreground">Container</span>
+							<span class="font-mono text-[0.6875rem]">{s.containerName}</span>
+						</p>
+						<button class="flex w-full items-center gap-1.5 text-left font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy: attach to this session from a shell on the Docker host" onclick={() => copyText(attachCommand, 'Copied the attach command')}>
+							<Copy class="size-3 shrink-0" /><span class="truncate">{attachCommand}</span>
+						</button>
+						<button class="flex items-center gap-1.5 font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy the container's working directory" onclick={() => copyText(`/workspace/${s.repoDir}`)}>
+							<Copy class="size-3" />/workspace/{s.repoDir}
+						</button>
+					</div>
 				</section>
 			</aside>
 		{/if}
 	</div>
 </div>
+
+<Dialog bind:open={skillOpen} title="Run a skill" description="Types the command into Claude's prompt in this session." width="max-w-lg">
+	<form id="run-skill" class="space-y-3" onsubmit={runSkill}>
+		<div class="grid gap-1.5">
+			{#each skills as o (o.command)}
+				<button
+					type="button"
+					class="flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left {skillCommand === o.command ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}"
+					onclick={() => (skillCommand = o.command)}
+				>
+					<span class="font-mono text-[0.8125rem] font-medium">{o.command}</span>
+					<span class="min-w-0 truncate text-xs text-muted-foreground">{o.description}</span>
+				</button>
+			{/each}
+		</div>
+		<div class="grid grid-cols-[10rem_1fr] gap-2">
+			<input class="input font-mono text-[0.8125rem]" bind:value={skillCommand} aria-label="Command" spellcheck="false" />
+			<input class="input font-mono text-[0.8125rem]" bind:value={skillArgs} aria-label="Arguments" placeholder="Arguments, e.g. a PR number" />
+		</div>
+	</form>
+	{#snippet footer()}
+		<button class="btn btn-ghost" onclick={() => (skillOpen = false)}>Cancel</button>
+		<button class="btn btn-primary" form="run-skill"><Wand />Run</button>
+	{/snippet}
+</Dialog>

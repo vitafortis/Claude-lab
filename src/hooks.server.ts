@@ -2,6 +2,7 @@ import { json, redirect } from '@sveltejs/kit';
 import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import { authenticate } from '#lib/server/auth.ts';
 import { publicUrl } from '#lib/server/origin.ts';
+import { startLinear } from '#lib/server/linear.ts';
 import { startLive } from '#lib/server/sessions/live.ts';
 import { handleUpgrade } from '#lib/server/terminal/upgrade.ts';
 
@@ -9,6 +10,7 @@ export const init: ServerInit = () => {
 	// server.js passes WebSocket upgrades (terminals) here.
 	globalThis.__ccmUpgrade = handleUpgrade;
 	startLive();
+	startLinear();
 };
 
 const PUBLIC = ['/login', '/setup', '/api/auth/', '/api/health'];

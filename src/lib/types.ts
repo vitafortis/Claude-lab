@@ -56,9 +56,34 @@ export const PERMISSION_MODES: { value: PermissionMode; label: string; hint: str
 
 export type SessionStatus = 'starting' | 'running' | 'stopped' | 'error';
 
+/** What started a session: a person with a task, a skill or command, or a Linear issue. */
+export type SessionKind = 'task' | 'skill' | 'linear';
+
+/** A pull request opened from the session's branch, found on GitHub. */
+export interface SessionPr {
+	number: number;
+	url: string;
+	state: 'open' | 'closed' | 'merged' | 'draft';
+}
+
+export interface LinearRef {
+	issueId: string;
+	identifier: string;
+	url: string;
+}
+
 export interface Session {
 	id: string;
 	name: string;
+	/** Docker container name: claude-<repo>, with -2, -3… for more sessions on one repo. */
+	containerName: string;
+	kind: SessionKind;
+	/** The skill or command it was started with, e.g. "/code-review 234". */
+	skill: string | null;
+	/** A pull request checked out at the first start. */
+	checkoutPr: number | null;
+	pr: SessionPr | null;
+	linear: LinearRef | null;
 	repoUrl: string;
 	/** owner/name for GitHub repos, null for other URLs. */
 	repoFullName: string | null;
@@ -83,6 +108,9 @@ export interface Session {
 
 export interface SessionInput {
 	name: string;
+	kind: SessionKind;
+	skill: string | null;
+	checkoutPr: number | null;
 	repoUrl: string;
 	repoFullName: string | null;
 	baseBranch: string | null;
@@ -148,6 +176,71 @@ export interface SessionLive {
 	at: string;
 }
 
+export interface GithubPull {
+	number: number;
+	title: string;
+	author: string | null;
+	draft: boolean;
+	headRef: string;
+	/** owner/name the branch lives in (a fork, for outside contributions). */
+	headRepo: string | null;
+	updatedAt: string;
+	url: string;
+}
+
+/** A skill or slash command a session can start with. */
+export interface SkillOption {
+	command: string;
+	description: string;
+	/** Where it comes from: Claude Code itself, or the account's own skills and commands. */
+	source: 'built-in' | 'account';
+	/** Takes a pull request number. */
+	takesPr?: boolean;
+}
+
+export interface LinearTeam {
+	id: string;
+	key: string;
+	name: string;
+}
+
+export interface LinearRule {
+	id: string;
+	name: string;
+	teamId: string;
+	teamKey: string;
+	/** Issues with this label start a session. */
+	label: string;
+	repo: string;
+	githubAccountId: string | null;
+	baseBranch: string | null;
+	claudeAccountId: string;
+	model: string | null;
+	permissionMode: PermissionMode;
+	/** First message; {identifier} {title} {description} {url} {branch} are filled in. */
+	prompt: string;
+	/** Comment on the issue when a session starts and when its PR opens. */
+	comment: boolean;
+	/** Move the issue to the team's first "started" state. */
+	moveToStarted: boolean;
+	enabled: boolean;
+	createdAt: string;
+	lastCheckedAt: string | null;
+	lastError: string | null;
+}
+
+export interface LinearRun {
+	ruleId: string;
+	issueId: string;
+	identifier: string;
+	title: string;
+	url: string;
+	sessionId: string | null;
+	status: 'started' | 'skipped' | 'error';
+	error: string | null;
+	createdAt: string;
+}
+
 export interface Settings {
 	sessionImage: string;
 	/** Docker network for session containers (blank: Docker's default bridge). */
@@ -160,6 +253,8 @@ export interface Settings {
 	defaultRemoteControl: boolean;
 	/** Extra KEY=value lines passed to every session container. */
 	extraEnv: string;
+	/** How cc·modern is reached from a browser, for links in Linear comments. */
+	publicUrl: string;
 }
 
 export interface Viewer {

@@ -7,27 +7,32 @@ import { randomToken } from './crypto.ts';
 import { config } from './config.ts';
 import { BadRequest } from './http.ts';
 import { getGithubToken, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
-import type { GithubAccount, GithubRepo } from '#lib/types.ts';
+import type { GithubAccount, GithubPull, GithubRepo, SessionPr } from '#lib/types.ts';
 
 const API = 'https://api.github.com';
 
-async function gh<T>(token: string, path: string): Promise<{ data: T; headers: Headers }> {
+/** A GitHub REST call, with the account's token or anonymously (public repos). */
+async function gh<T>(token: string | undefined, path: string): Promise<{ data: T; headers: Headers }> {
 	const res = await fetch(`${API}${path}`, {
 		headers: {
 			accept: 'application/vnd.github+json',
-			authorization: `Bearer ${token}`,
+			...(token ? { authorization: `Bearer ${token}` } : {}),
 			'x-github-api-version': '2022-11-28',
 			'user-agent': 'cc-modern'
 		},
 		signal: AbortSignal.timeout(15_000)
 	});
 	if (res.status === 401) throw new BadRequest('GitHub rejected the token (expired or revoked?)');
+	if (res.status === 404 && !token) throw new BadRequest('Repository not found (private? pick a GitHub account)');
 	if (!res.ok) {
 		const body = (await res.json().catch(() => ({}))) as { message?: string };
 		throw new BadRequest(`GitHub: ${body.message ?? res.statusText}`);
 	}
 	return { data: (await res.json()) as T, headers: res.headers };
 }
+
+const FULL_NAME = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
+const tokenOf = (account: GithubAccount | null) => (account ? getGithubToken(account.id) : undefined);
 
 type GhUser = { id: number; login: string; name: string | null; avatar_url: string };
 type GhRepo = {
@@ -110,23 +115,60 @@ export async function listRepos(account: GithubAccount, refresh = false): Promis
 }
 
 export async function listBranches(account: GithubAccount | null, fullName: string): Promise<string[]> {
-	if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(fullName)) throw new BadRequest('Invalid repository');
-	const token = account ? getGithubToken(account.id) : undefined;
+	if (!FULL_NAME.test(fullName)) throw new BadRequest('Invalid repository');
 	const branches: string[] = [];
 	for (let page = 1; page <= 5; page++) {
-		const { data } = token
-			? await gh<{ name: string }[]>(token, `/repos/${fullName}/branches?per_page=100&page=${page}`)
-			: await publicGet<{ name: string }[]>(`/repos/${fullName}/branches?per_page=100&page=${page}`);
+		const { data } = await gh<{ name: string }[]>(tokenOf(account), `/repos/${fullName}/branches?per_page=100&page=${page}`);
 		branches.push(...data.map((b) => b.name));
 		if (data.length < 100) break;
 	}
 	return branches;
 }
 
-async function publicGet<T>(path: string): Promise<{ data: T }> {
-	const res = await fetch(`${API}${path}`, { headers: { accept: 'application/vnd.github+json', 'user-agent': 'cc-modern' }, signal: AbortSignal.timeout(15_000) });
-	if (!res.ok) throw new BadRequest(res.status === 404 ? 'Repository not found (private? pick a GitHub account)' : `GitHub: ${res.statusText}`);
-	return { data: (await res.json()) as T };
+type GhPull = {
+	number: number;
+	title: string;
+	user: { login: string } | null;
+	draft: boolean;
+	state: 'open' | 'closed';
+	merged_at: string | null;
+	head: { ref: string; repo: { full_name: string } | null };
+	updated_at: string;
+	html_url: string;
+};
+
+const toPull = (p: GhPull): GithubPull => ({
+	number: p.number,
+	title: p.title,
+	author: p.user?.login ?? null,
+	draft: p.draft,
+	headRef: p.head.ref,
+	headRepo: p.head.repo?.full_name ?? null,
+	updatedAt: p.updated_at,
+	url: p.html_url
+});
+
+/** Open pull requests, most recently updated first, for "check out a pull request". */
+export async function listPulls(account: GithubAccount | null, fullName: string): Promise<GithubPull[]> {
+	if (!FULL_NAME.test(fullName)) throw new BadRequest('Invalid repository');
+	const { data } = await gh<GhPull[]>(tokenOf(account), `/repos/${fullName}/pulls?state=open&sort=updated&direction=desc&per_page=50`);
+	return data.map(toPull);
+}
+
+export async function getPull(account: GithubAccount | null, fullName: string, number: number): Promise<GithubPull> {
+	if (!FULL_NAME.test(fullName)) throw new BadRequest('Invalid repository');
+	const { data } = await gh<GhPull>(tokenOf(account), `/repos/${fullName}/pulls/${number}`);
+	return toPull(data);
+}
+
+/** The newest pull request opened from `branch` of the repo, if any. */
+export async function findPrForBranch(account: GithubAccount | null, fullName: string, branch: string): Promise<SessionPr | null> {
+	const owner = fullName.split('/')[0];
+	const q = new URLSearchParams({ head: `${owner}:${branch}`, state: 'all', per_page: '1' });
+	const { data } = await gh<GhPull[]>(tokenOf(account), `/repos/${fullName}/pulls?${q}`);
+	const p = data[0];
+	if (!p) return null;
+	return { number: p.number, url: p.html_url, state: p.merged_at ? 'merged' : p.state === 'closed' ? 'closed' : p.draft ? 'draft' : 'open' };
 }
 
 // ── device flow ────────────────────────────────────────────────────────

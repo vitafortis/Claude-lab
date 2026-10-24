@@ -165,6 +165,11 @@
 					<Switch bind:checked={form.defaultRemoteControl} label="Remote Control by default" />
 				</div>
 				<div class="sm:col-span-2">
+					<label class="label" for="pub">Public URL</label>
+					<input id="pub" class="input font-mono text-xs" placeholder="Where you open cc·modern, e.g. https://cc.home.arpa" bind:value={form.publicUrl} />
+					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments. Empty: the address you last opened cc·modern at.</p>
+				</div>
+				<div class="sm:col-span-2">
 					<label class="label" for="env">Extra environment</label>
 					<textarea id="env" class="input h-auto min-h-24 py-2 font-mono text-xs" rows="4" placeholder={'# KEY=value, one per line\nNPM_CONFIG_REGISTRY=https://npm.lan'} bind:value={form.extraEnv}></textarea>
 				</div>

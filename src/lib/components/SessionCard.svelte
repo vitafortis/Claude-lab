@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { ArrowRight, CircleAlert, ExternalLink, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Wrench } from '@lucide/svelte';
 	import StateBadge from './StateBadge.svelte';
+	import SessionTags from './SessionTags.svelte';
 	import StateDot from './StateDot.svelte';
 	import { ago } from '#lib/client/format.ts';
 	import { sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
@@ -45,6 +46,7 @@
 				<span class="truncate">{s.repoFullName ?? s.repoUrl}</span>
 				{#if branch}<GitBranch class="size-3 shrink-0" /><span class="truncate font-mono text-[0.6875rem]">{branch}</span>{/if}
 			</p>
+			<div class="mt-1.5 empty:hidden"><SessionTags session={s} /></div>
 		</div>
 		<StateBadge state={view} />
 	</header>

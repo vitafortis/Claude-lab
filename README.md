@@ -7,21 +7,54 @@
 <p align="center">
   Claude Code sessions on your own hardware.<br />
   Pick a repo, and Claude Code starts in its own container on your homelab, with a terminal in the browser,<br />
-  live summaries of every session, Remote Control, and sessions you can stop and pick up again.
+  live summaries of every session, Remote Control, and sessions you can stop and pick up again.<br />
+  Label a Linear issue and a session starts on its own; start a session from a skill to review a pull request.
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="cc·modern sessions overview" />
 </p>
 
 ## Features
 
-- **One container per session**: cc·modern clones the repo (optionally onto a new branch) into a fresh container and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
+- **One container per session**: cc·modern clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
 - **Terminals in the browser**: open any session as a full terminal (xterm.js over a WebSocket). Claude runs inside tmux, so closing the tab doesn't stop it, and several browsers can watch the same session. A **Shell** tab opens a second terminal in the same container. On phones, a key bar (Esc, Tab, ⇧Tab, arrows, Ctrl+C) and a message box make it usable with a touch keyboard.
 - **Live overview**: every session shows whether Claude is *working*, *needs you* (a permission prompt or question), is *idle*, or has exited, plus the last prompt and reply, the task list, the tool it's running, git changes and the last lines of its screen. Sessions that need you sort to the top and get a quick-reply box. **Summarize** asks a small model for a three-sentence summary, using the session's own Claude account.
 - **Stop, resume, relaunch**: stopping removes the container and keeps everything else. Starting again picks up the newest conversation (`claude --continue`); you can also resume any earlier conversation or start a fresh one, and restart Claude inside a running session.
+- **Linear automations**: connect Linear and add rules like *issues in ENG labelled `claude` start a session on owner/repo*. Each new issue gets its own session, on Linear's branch name for it (so the pull request links back), with the issue as the first message. cc·modern moves the issue to In Progress, comments with a link to the session, and comments again with the PR once Claude opens one. It polls Linear every minute, so nothing on your network has to be reachable from outside.
+- **Skill sessions**: start a session from a skill or slash command instead of a message: `/code-review 234` on a pull request, `/security-review`, `/simplify`, or the account's own skills. Pick a pull request and the session checks out its branch (or `pull/<n>/head` for a fork). **Review a PR** on the overview starts one in two clicks, and **Session → Run a skill** sends one to a running session.
+- **Pull requests**: when a session's branch has a pull request, its number and state (open, draft, merged, closed) show on the card and link to GitHub.
 - **Remote Control**: sessions on a Claude subscription start with `--remote-control "<name>"`, so they also show up at claude.ai/code and in the Claude app, under the session's name. The overview links straight to them.
 - **Claude accounts**: sign in with a Pro or Max plan in a terminal right in the browser (`claude auth login`), or add a long-lived token (`claude setup-token`) or an API key. Sessions of one account share its login, settings and memory, like terminals on one machine.
 - **GitHub accounts and orgs**: add personal access tokens (or sign in with GitHub through your own OAuth app), browse every repo the token can see across your account and organizations, pick a branch. Sessions get the token for `git push` and `gh pr create`, and commit under your GitHub noreply address.
 - **Encrypted storage**: tokens and keys are sealed with AES-256-GCM and never sent back to the browser.
 - **Command palette**: `⌘K` (`Ctrl+K`) jumps to any session or page.
 - **Light and dark** themes, phone-friendly layout, multi-arch images (`amd64`, `arm64`).
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/session.png" alt="A session's terminal with its summary, tasks, git status and conversations" /></td>
+    <td><img src="docs/screenshots/automations.png" alt="Linear automations: a rule and the issues it picked up" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/new-skill.png" alt="New session in skill mode: /code-review on pull request 18" /></td>
+    <td><img src="docs/screenshots/automations-rule.png" alt="Editing a Linear rule" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/session-skill.png" alt="Run a skill in a running session" /></td>
+    <td><img src="docs/screenshots/overview-light.png" alt="The overview in the light theme" /></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/phone-overview.png" width="280" alt="Overview on a phone" />
+  &nbsp;
+  <img src="docs/screenshots/phone-session.png" width="280" alt="A session's terminal on a phone, with the key bar" />
+</p>
+
+Screenshots use demo data: the conversations, Linear workspace and pull requests are made up.
 
 ## Getting started
 
@@ -103,12 +136,22 @@ Add a **fine-grained token** with access to the repos you want (*Contents* and *
 
 In a session, `GH_TOKEN` is set to the session's GitHub account, so `git clone/push` over https and `gh` work without further setup.
 
+## Linear
+
+1. Create a personal API key in Linear (Settings → Security & access → Personal API keys) and paste it under **Automations**.
+2. **Add rule**: pick the team, the label that hands an issue to Claude (default `claude`), the repository, the Claude and GitHub accounts and the permission mode. The first message is a template with `{identifier}`, `{title}`, `{description}`, `{url}` and `{branch}`. Start it with a skill (`/my-skill {identifier}`) to run one.
+3. Label an issue. Within a minute (or on **Check now**) a session starts on Linear's branch name for the issue, the issue moves to In Progress, and a comment links to the session. When Claude opens the pull request, a second comment links to it, and Linear's GitHub integration links the PR to the issue through the branch name and "Fixes ENG-123".
+
+Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open cc·modern at.
+
 ## Sessions
 
 - **Permission modes**: *Ask*, *Accept edits*, *Plan*, *Auto*, or *Bypass*. Bypass skips every prompt; the container limits what Claude can reach, but it still has your GitHub token and network access.
 - **Session settings** (Claude account, GitHub account, model, permission mode, Remote Control) can change later. They apply the next time Claude starts: **Session → Continue newest conversation** restarts Claude in place.
 - **Stop** removes the container; the repo, uncommitted changes and conversations stay. **Start** (or **Resume** in the overview) brings the session back with the current image and settings.
+- **Git identity**: commits use the GitHub account's name and noreply address, or `Claude <noreply@anthropic.com>` for sessions without a GitHub account.
 - **Conversations** in the session panel lists every saved conversation; **Resume** restarts Claude on that one.
+- **Attach from the host**: the session panel shows the container name and a copyable `docker exec -it -u node claude-<repo> tmux attach -t main`, for when you're on the server over SSH.
 - **Delete** stops the session and removes its repo clone, home folder and conversations. Pushed commits stay on GitHub.
 
 ### The session image
@@ -150,6 +193,8 @@ pnpm build && pnpm start
 ```
 
 Outside Docker, session data lives in `./data/sessions` and session containers bind-mount it. Build the session image locally with `docker build -t cc-modern-session:dev session` and set `CCM_SESSION_IMAGE=cc-modern-session:dev`.
+
+To try Linear rules without a workspace, point `CCM_LINEAR_API_URL` at a mock GraphQL server.
 
 `pnpm e2e` runs a smoke test against a running instance (`CCM_URL`, `CCM_EMAIL`, `CCM_PASSWORD`): it starts a session on a public repo with a throwaway, signed-out Claude account, checks the clone, both terminals, stop and resume, then deletes everything it made.
 

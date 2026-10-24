@@ -66,12 +66,11 @@
 		let cleanup = () => {};
 
 		void (async () => {
-			const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { Unicode11Addon }, { WebglAddon }] = await Promise.all([
+			const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { Unicode11Addon }] = await Promise.all([
 				import('@xterm/xterm'),
 				import('@xterm/addon-fit'),
 				import('@xterm/addon-web-links'),
-				import('@xterm/addon-unicode11'),
-				import('@xterm/addon-webgl')
+				import('@xterm/addon-unicode11')
 			]);
 			if (disposed) return;
 			const bg = getComputedStyle(host).getPropertyValue('--term-bg').trim() || '#0d1117';
@@ -91,14 +90,7 @@
 			term.loadAddon(new Unicode11Addon());
 			term.unicode.activeVersion = '11';
 			term.open(host);
-			// WebGL draws box and block characters itself (Claude Code's logo, borders) without
-			// gaps between rows; the DOM renderer stays as the fallback.
-			try {
-				const webgl = new WebglAddon();
-				webgl.onContextLoss(() => webgl.dispose());
-				term.loadAddon(webgl);
-			} catch {}
-			// Fonts load after first paint; refit once they're in so cells measure right.
+			// Fonts load after first paint; measure cells only once they're in.
 			await document.fonts?.ready;
 			fit.fit();
 			focusTerm = () => term.focus();

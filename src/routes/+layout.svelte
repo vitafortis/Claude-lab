@@ -15,6 +15,7 @@
 		PanelLeftClose,
 		PanelLeftOpen,
 		Menu,
+		Workflow,
 		X
 	} from '@lucide/svelte';
 	import Logo from '#lib/components/Logo.svelte';
@@ -60,6 +61,7 @@
 
 	const nav = [
 		{ href: '/', label: 'Sessions', icon: LayoutDashboard },
+		{ href: '/automations', label: 'Automations', icon: Workflow },
 		{ href: '/accounts', label: 'Accounts', icon: KeyRound },
 		{ href: '/settings', label: 'Settings', icon: Settings }
 	];

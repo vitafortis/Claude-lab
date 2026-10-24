@@ -55,7 +55,8 @@ export function confirmAction(opts: Omit<ConfirmRequest, 'resolve'>): Promise<bo
 export const sessions = $state<{ list: Session[]; live: Record<string, SessionLive>; connected: boolean }>({
 	list: [],
 	live: {},
-	connected: false
+	// Optimistic: "offline" shows only after the stream actually drops.
+	connected: true
 });
 
 let source: EventSource | null = null;

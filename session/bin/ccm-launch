@@ -21,6 +21,11 @@ if [ ! -e "$repo/.git" ]; then
 		echo "${red}Clone failed.${reset} Check the URL and the GitHub account's access, then use Restart."
 		fallback "clone failed"
 	fi
+	# A pull request from a fork: its head is only reachable as pull/<n>/head. (A PR from
+	# this repo was cloned straight onto its branch, so pushes update the PR.)
+	if [ -n "${CCM_PR_NUMBER:-}" ] && [ -z "${CCM_BASE_BRANCH:-}" ]; then
+		git -C "$repo" fetch origin "pull/$CCM_PR_NUMBER/head:pr-$CCM_PR_NUMBER" && git -C "$repo" switch "pr-$CCM_PR_NUMBER"
+	fi
 	if [ -n "${CCM_NEW_BRANCH:-}" ]; then
 		git -C "$repo" switch -c "$CCM_NEW_BRANCH" || git -C "$repo" switch "$CCM_NEW_BRANCH"
 	fi

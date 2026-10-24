@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { exec } from '../docker.ts';
 import { getSession, listSessions, setSessionRcUrl } from '../store.ts';
 import { findRcUrl, paneState, parseProbe } from '#lib/pane.ts';
+import { checkPr } from './prs.ts';
 import { reconcile, runningContainer } from './runtime.ts';
 import { metaDir } from './storage.ts';
 import { latestExcerpt, latestSummary } from './transcripts.ts';
@@ -56,6 +57,7 @@ async function pollOnce() {
 	const results = await Promise.all(
 		sessions.map(async (s): Promise<SessionLive> => {
 			const p = await probe(s, withGit);
+			void checkPr(s, p.git);
 			let summary = null;
 			try {
 				summary = latestSummary(s);

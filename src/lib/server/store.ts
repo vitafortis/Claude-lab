@@ -4,13 +4,19 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from './config.ts';
 import { decrypt, encrypt } from './crypto.ts';
+import { slugify } from '#lib/launch.ts';
 import type {
 	ClaudeAccount,
 	ClaudeAuthKind,
 	GithubAccount,
+	LinearRef,
+	LinearRule,
+	LinearRun,
 	PermissionMode,
 	Session,
 	SessionInput,
+	SessionKind,
+	SessionPr,
 	SessionStatus,
 	Settings,
 	User
@@ -101,7 +107,60 @@ function db(): DatabaseSync {
 			stopped_at TEXT
 		);
 	`);
+	migrate(handle);
 	return handle;
+}
+
+function migrate(h: DatabaseSync) {
+	const cols = new Set((h.prepare(`SELECT name FROM pragma_table_info('sessions')`).all() as { name: string }[]).map((c) => c.name));
+	const add = (name: string, def: string) => {
+		if (!cols.has(name)) h.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${def}`);
+	};
+	add('container_name', 'TEXT');
+	add('kind', `TEXT NOT NULL DEFAULT 'task'`);
+	add('skill', 'TEXT');
+	add('checkout_pr', 'INTEGER');
+	add('pr_number', 'INTEGER');
+	add('pr_url', 'TEXT');
+	add('pr_state', 'TEXT');
+	add('linear_issue_id', 'TEXT');
+	add('linear_identifier', 'TEXT');
+	add('linear_url', 'TEXT');
+	h.exec(`
+		CREATE TABLE IF NOT EXISTS linear_rules (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			team_id TEXT NOT NULL,
+			team_key TEXT NOT NULL,
+			label TEXT NOT NULL,
+			repo TEXT NOT NULL,
+			github_account_id TEXT REFERENCES github_accounts(id) ON DELETE SET NULL,
+			base_branch TEXT,
+			claude_account_id TEXT NOT NULL REFERENCES claude_accounts(id),
+			model TEXT,
+			permission_mode TEXT NOT NULL DEFAULT 'default',
+			prompt TEXT NOT NULL,
+			comment INTEGER NOT NULL DEFAULT 1,
+			move_to_started INTEGER NOT NULL DEFAULT 1,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL,
+			last_checked_at TEXT,
+			last_error TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS linear_runs (
+			rule_id TEXT NOT NULL REFERENCES linear_rules(id) ON DELETE CASCADE,
+			issue_id TEXT NOT NULL,
+			identifier TEXT NOT NULL,
+			title TEXT NOT NULL,
+			url TEXT NOT NULL,
+			session_id TEXT,
+			status TEXT NOT NULL,
+			error TEXT,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (rule_id, issue_id)
+		);
+	`);
 }
 
 type Row = Record<string, unknown>;
@@ -129,7 +188,8 @@ export function defaultSettings(): Settings {
 		defaultModel: '',
 		defaultPermissionMode: 'default',
 		defaultRemoteControl: true,
-		extraEnv: ''
+		extraEnv: '',
+		publicUrl: ''
 	};
 }
 
@@ -356,6 +416,15 @@ function toSession(r: Row): Session {
 		model: (r.model as string) ?? null,
 		permissionMode: r.permission_mode as PermissionMode,
 		remoteControl: !!r.remote_control,
+		// Sessions from before container names were stored keep their original name.
+		containerName: (r.container_name as string) || `ccm-${slugify(r.name as string, 30)}-${(r.id as string).slice(0, 8)}`,
+		kind: ((r.kind as string) || 'task') as SessionKind,
+		skill: (r.skill as string) ?? null,
+		checkoutPr: (r.checkout_pr as number) ?? null,
+		pr: r.pr_number ? { number: r.pr_number as number, url: r.pr_url as string, state: r.pr_state as SessionPr['state'] } : null,
+		linear: r.linear_issue_id
+			? { issueId: r.linear_issue_id as string, identifier: r.linear_identifier as string, url: r.linear_url as string }
+			: null,
 		status: r.status as SessionStatus,
 		containerId: (r.container_id as string) ?? null,
 		error: (r.error as string) ?? null,
@@ -379,12 +448,20 @@ export function sessionsUsingClaudeAccount(id: string): number {
 	return (db().prepare('SELECT COUNT(*) AS n FROM sessions WHERE claude_account_id = ?').get(id) as { n: number }).n;
 }
 
-export function createSession(id: string, input: Omit<SessionInput, 'prompt'> & { repoDir: string }): Session {
+export function containerNamesInUse(): Set<string> {
+	return new Set(listSessions().map((s) => s.containerName));
+}
+
+export function createSession(
+	id: string,
+	input: Omit<SessionInput, 'prompt'> & { repoDir: string; containerName: string; linear?: LinearRef | null }
+): Session {
 	db()
 		.prepare(
 			`INSERT INTO sessions (id, name, repo_url, repo_full_name, repo_dir, base_branch, new_branch, claude_account_id,
-				github_account_id, model, permission_mode, remote_control, status, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'stopped', ?)`
+				github_account_id, model, permission_mode, remote_control, status, created_at,
+				container_name, kind, skill, checkout_pr, linear_issue_id, linear_identifier, linear_url)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'stopped', ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.run(
 			id,
@@ -399,9 +476,22 @@ export function createSession(id: string, input: Omit<SessionInput, 'prompt'> & 
 			input.model,
 			input.permissionMode,
 			input.remoteControl ? 1 : 0,
-			now()
+			now(),
+			input.containerName,
+			input.kind,
+			input.skill,
+			input.checkoutPr,
+			input.linear?.issueId ?? null,
+			input.linear?.identifier ?? null,
+			input.linear?.url ?? null
 		);
 	return getSession(id)!;
+}
+
+export function setSessionPr(id: string, pr: SessionPr | null) {
+	db()
+		.prepare('UPDATE sessions SET pr_number = ?, pr_url = ?, pr_state = ? WHERE id = ?')
+		.run(pr?.number ?? null, pr?.url ?? null, pr?.state ?? null, id);
 }
 
 /** Fields that can change after creation; they apply from the next launch. */
@@ -449,4 +539,131 @@ export function setSessionRcUrl(id: string, url: string | null) {
 
 export function deleteSession(id: string): boolean {
 	return db().prepare('DELETE FROM sessions WHERE id = ?').run(id).changes > 0;
+}
+
+// ── Linear ─────────────────────────────────────────────────────────────
+
+export function getLinearKey(): string | undefined {
+	const v = getKv<string | null>('linear:key', null);
+	return v ? decrypt(v, 'linear') : undefined;
+}
+
+export function setLinearKey(key: string | null) {
+	setKv('linear:key', key ? encrypt(key, 'linear') : null);
+}
+
+function toRule(r: Row): LinearRule {
+	return {
+		id: r.id as string,
+		name: r.name as string,
+		teamId: r.team_id as string,
+		teamKey: r.team_key as string,
+		label: r.label as string,
+		repo: r.repo as string,
+		githubAccountId: (r.github_account_id as string) ?? null,
+		baseBranch: (r.base_branch as string) ?? null,
+		claudeAccountId: r.claude_account_id as string,
+		model: (r.model as string) ?? null,
+		permissionMode: r.permission_mode as PermissionMode,
+		prompt: r.prompt as string,
+		comment: !!r.comment,
+		moveToStarted: !!r.move_to_started,
+		enabled: !!r.enabled,
+		createdAt: r.created_at as string,
+		lastCheckedAt: (r.last_checked_at as string) ?? null,
+		lastError: (r.last_error as string) ?? null
+	};
+}
+
+export type LinearRuleInput = Omit<LinearRule, 'id' | 'createdAt' | 'lastCheckedAt' | 'lastError'>;
+
+export function listLinearRules(): LinearRule[] {
+	return (db().prepare('SELECT * FROM linear_rules ORDER BY created_at').all() as Row[]).map(toRule);
+}
+
+export function getLinearRule(id: string): LinearRule | undefined {
+	const r = db().prepare('SELECT * FROM linear_rules WHERE id = ?').get(id) as Row | undefined;
+	return r ? toRule(r) : undefined;
+}
+
+const RULE_COLS = [
+	['name', 'name'],
+	['team_id', 'teamId'],
+	['team_key', 'teamKey'],
+	['label', 'label'],
+	['repo', 'repo'],
+	['github_account_id', 'githubAccountId'],
+	['base_branch', 'baseBranch'],
+	['claude_account_id', 'claudeAccountId'],
+	['model', 'model'],
+	['permission_mode', 'permissionMode'],
+	['prompt', 'prompt'],
+	['comment', 'comment'],
+	['move_to_started', 'moveToStarted'],
+	['enabled', 'enabled']
+] as const;
+
+const ruleValues = (input: LinearRuleInput) =>
+	RULE_COLS.map(([, k]) => {
+		const v = input[k];
+		return typeof v === 'boolean' ? (v ? 1 : 0) : v;
+	});
+
+export function createLinearRule(input: LinearRuleInput): LinearRule {
+	const id = randomUUID();
+	db()
+		.prepare(`INSERT INTO linear_rules (id, ${RULE_COLS.map(([c]) => c).join(', ')}, created_at) VALUES (?, ${RULE_COLS.map(() => '?').join(', ')}, ?)`)
+		.run(id, ...ruleValues(input), now());
+	return getLinearRule(id)!;
+}
+
+export function updateLinearRule(id: string, input: LinearRuleInput) {
+	db()
+		.prepare(`UPDATE linear_rules SET ${RULE_COLS.map(([c]) => `${c} = ?`).join(', ')} WHERE id = ?`)
+		.run(...ruleValues(input), id);
+}
+
+export function setLinearRuleChecked(id: string, error: string | null) {
+	db().prepare('UPDATE linear_rules SET last_checked_at = ?, last_error = ? WHERE id = ?').run(now(), error, id);
+}
+
+export function deleteLinearRule(id: string): boolean {
+	return db().prepare('DELETE FROM linear_rules WHERE id = ?').run(id).changes > 0;
+}
+
+function toRun(r: Row): LinearRun {
+	return {
+		ruleId: r.rule_id as string,
+		issueId: r.issue_id as string,
+		identifier: r.identifier as string,
+		title: r.title as string,
+		url: r.url as string,
+		sessionId: (r.session_id as string) ?? null,
+		status: r.status as LinearRun['status'],
+		error: (r.error as string) ?? null,
+		createdAt: r.created_at as string
+	};
+}
+
+export function listLinearRuns(limit = 50): LinearRun[] {
+	return (db().prepare(`SELECT * FROM linear_runs WHERE status != 'skipped' ORDER BY created_at DESC LIMIT ?`).all(limit) as Row[]).map(toRun);
+}
+
+export function linearRunForSession(sessionId: string): LinearRun | undefined {
+	const r = db().prepare('SELECT * FROM linear_runs WHERE session_id = ?').get(sessionId) as Row | undefined;
+	return r ? toRun(r) : undefined;
+}
+
+export function hasLinearRun(ruleId: string, issueId: string): boolean {
+	return !!db().prepare('SELECT 1 FROM linear_runs WHERE rule_id = ? AND issue_id = ?').get(ruleId, issueId);
+}
+
+export function recordLinearRun(run: Omit<LinearRun, 'createdAt'>) {
+	db()
+		.prepare(
+			`INSERT INTO linear_runs (rule_id, issue_id, identifier, title, url, session_id, status, error, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(rule_id, issue_id) DO UPDATE SET session_id = excluded.session_id, status = excluded.status, error = excluded.error`
+		)
+		.run(run.ruleId, run.issueId, run.identifier, run.title, run.url, run.sessionId, run.status, run.error, now());
 }

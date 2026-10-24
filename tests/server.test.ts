@@ -49,3 +49,20 @@ test('sessionTokenFromHeader', () => {
 	assert.equal(sessionTokenFromHeader('a=1; ccm_session=tok%3D; b=2'), 'tok=');
 	assert.equal(sessionTokenFromHeader(undefined), undefined);
 });
+
+test('renderPrompt fills in the issue', async () => {
+	const { renderPrompt, DEFAULT_PROMPT } = await import('#lib/server/linear.ts');
+	const issue = { identifier: 'ENG-7', title: 'Fix login', description: null, url: 'https://linear.app/x/issue/ENG-7' };
+	const p = renderPrompt(DEFAULT_PROMPT, issue, 'sam/eng-7-fix-login');
+	assert.match(p, /^You're working on Linear issue ENG-7: Fix login$/m);
+	assert.match(p, /\(No description\.\)/);
+	assert.match(p, /branch sam\/eng-7-fix-login/);
+	assert.match(p, /"Fixes ENG-7"/);
+	assert.equal(renderPrompt('/review {identifier} {unknown}', issue, 'b'), '/review ENG-7 {unknown}');
+});
+
+test('frontMatterDescription', async () => {
+	const { frontMatterDescription } = await import('#lib/server/skills.ts');
+	assert.equal(frontMatterDescription('---\nname: x\ndescription: "Reviews PRs"\n---\nbody'), 'Reviews PRs');
+	assert.equal(frontMatterDescription('no front matter'), '');
+});
