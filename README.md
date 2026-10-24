@@ -47,7 +47,7 @@
   </tr>
   <tr>
     <td><img src="docs/screenshots/sign-in.png" alt="Settings → Sign-in and users: password, single sign-on, reverse proxy headers" /></td>
-    <td><img src="docs/screenshots/login-sso.png" alt="The sign-in page with single sign-on" /></td>
+    <td><img src="docs/screenshots/login.png" alt="The sign-in page with single sign-on" /></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/session.png" alt="A session's terminal with its summary, tasks, git status and conversations" /></td>
@@ -69,7 +69,7 @@
   <img src="docs/screenshots/phone-session.png" width="280" alt="A session's terminal on a phone, with the key bar" />
 </p>
 
-Screenshots use demo data: the conversations, Linear workspace and pull requests are made up.
+Screenshots use demo data: the conversations, Linear workspace and pull requests are made up. **[All screenshots →](docs/screenshots/README.md)**
 
 ## Getting started
 
@@ -261,4 +261,6 @@ Built with SvelteKit, Tailwind CSS and xterm.js, in the same style as [pg·moder
 
 ## License
 
-[Apache 2.0](LICENSE)
+[Apache 2.0](LICENSE): use, modify and redistribute it, commercially or not, keeping the license and [NOTICE](NOTICE). Contributions are accepted under the same license.
+
+cc·modern is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners.
