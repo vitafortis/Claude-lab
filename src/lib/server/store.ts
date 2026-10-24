@@ -21,7 +21,9 @@ import type {
 	SessionPr,
 	SessionStatus,
 	Settings,
-	User
+	User,
+	UserRole,
+	UserSource
 } from '#lib/types.ts';
 
 let handle: DatabaseSync | undefined;
@@ -177,6 +179,10 @@ function migrate(h: DatabaseSync) {
 			PRIMARY KEY (rule_id, issue_id)
 		);
 	`);
+	const userCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('users')`).all() as { name: string }[]).map((c) => c.name));
+	// Everyone before sign-in settings existed was a local admin.
+	if (!userCols.has('role')) h.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'`);
+	if (!userCols.has('source')) h.exec(`ALTER TABLE users ADD COLUMN source TEXT NOT NULL DEFAULT 'local'`);
 	const ruleCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('linear_rules')`).all() as { name: string }[]).map((c) => c.name));
 	if (!ruleCols.has('profile_id')) h.exec('ALTER TABLE linear_rules ADD COLUMN profile_id TEXT');
 }
@@ -208,7 +214,8 @@ export function defaultSettings(): Settings {
 		defaultPermissionMode: 'default',
 		defaultRemoteControl: true,
 		extraEnv: '',
-		publicUrl: ''
+		publicUrl: '',
+		githubClientId: config.githubClientId ?? ''
 	};
 }
 
@@ -227,9 +234,52 @@ function toUser(r: Row): User {
 		id: r.id as string,
 		email: r.email as string,
 		name: (r.name as string) ?? null,
+		role: (r.role as UserRole) ?? 'admin',
+		source: (r.source as UserSource) ?? 'local',
 		createdAt: r.created_at as string,
 		lastLoginAt: (r.last_login_at as string) ?? null
 	};
+}
+
+export function listUsers(): User[] {
+	return (db().prepare('SELECT * FROM users ORDER BY source, created_at').all() as Row[]).map(toUser);
+}
+
+export function getUser(id: string): User | undefined {
+	const r = db().prepare('SELECT * FROM users WHERE id = ?').get(id) as Row | undefined;
+	return r ? toUser(r) : undefined;
+}
+
+export function countAdmins(): number {
+	return (db().prepare(`SELECT COUNT(*) AS n FROM users WHERE role = 'admin'`).get() as { n: number }).n;
+}
+
+/**
+ * Finds or creates the user an SSO sign-in stands for. A local user with the same email
+ * becomes that user (the provider vouched for the address). `admin` grants the role; it
+ * never takes away one given by hand.
+ */
+export function upsertExternalUser(input: { email: string; name: string | null; source: 'oidc' | 'proxy'; admin: boolean }): User {
+	const existing = findUserByEmail(input.email);
+	if (existing) {
+		if (input.name && input.name !== existing.name) updateUser(existing.id, { name: input.name });
+		if (input.admin && existing.role !== 'admin') setUserRole(existing.id, 'admin');
+		return getUser(existing.id)!;
+	}
+	const id = randomUUID();
+	// No password: an empty hash never verifies.
+	db()
+		.prepare('INSERT INTO users (id, email, name, password_hash, role, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+		.run(id, input.email.trim(), input.name, '', input.admin ? 'admin' : 'member', input.source, now());
+	return getUser(id)!;
+}
+
+export function setUserRole(id: string, role: UserRole) {
+	db().prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+}
+
+export function deleteUser(id: string): boolean {
+	return db().prepare('DELETE FROM users WHERE id = ?').run(id).changes > 0;
 }
 
 export function countUsers(): number {
@@ -253,6 +303,7 @@ export function createUser(input: { email: string; name?: string | null; passwor
 		.run(id, input.email.trim(), input.name ?? null, input.passwordHash, now());
 	return findUserByEmail(input.email)!;
 }
+
 
 export function updateUser(id: string, patch: { name?: string | null; email?: string; passwordHash?: string }) {
 	if (patch.name !== undefined) db().prepare('UPDATE users SET name = ? WHERE id = ?').run(patch.name, id);

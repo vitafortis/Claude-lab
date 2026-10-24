@@ -1,22 +1,36 @@
-# Build both images from this checkout instead of pulling them:
+# Build the images from this checkout instead of pulling them:
 #
 #   docker compose -f compose.yaml -f compose.build.yaml up -d --build
 #
-# Handy for adding tools to the session image (edit session/Dockerfile) or running
-# without access to ghcr.io.
+# Handy for adding tools to the session image (edit session/Dockerfile), for running
+# without access to ghcr.io, or for trying a branch before it's published.
 services:
   cc-modern:
     image: cc-modern:local
     build: .
     environment:
       CCM_SESSION_IMAGE: cc-modern-session:local
+      CCM_AGENTS_IMAGE: cc-modern-session:local-all
     depends_on:
       session-image:
         condition: service_completed_successfully
+      session-image-all:
+        condition: service_completed_successfully
 
-  # Builds the session image; cc·modern starts the actual session containers from it.
+  # Build the session images; cc·modern starts the actual session containers from them.
   session-image:
     image: cc-modern-session:local
     build: ./session
+    entrypoint: ["true"]
+    restart: "no"
+
+  # With Codex CLI and Gemini CLI, for OpenAI and Google accounts. Remove this service
+  # (and CCM_AGENTS_IMAGE above) if you only use Claude.
+  session-image-all:
+    image: cc-modern-session:local-all
+    build:
+      context: ./session
+      args:
+        AGENTS: claude codex gemini
     entrypoint: ["true"]
     restart: "no"

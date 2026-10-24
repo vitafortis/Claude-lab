@@ -1,7 +1,9 @@
 import type { Cookies } from '@sveltejs/kit';
+import { accessFor, getAuthSettings, signInRequired } from './auth-config.ts';
 import { config } from './config.ts';
+import { ipMatches } from './net.ts';
 import { hashPassword, randomToken, sha256 } from './crypto.ts';
-import { authSessionUser, countUsers, createAuthSession, createUser, deleteAuthSession, touchUserLogin } from './store.ts';
+import { authSessionUser, countUsers, createAuthSession, createUser, deleteAuthSession, touchUserLogin, upsertExternalUser } from './store.ts';
 import type { User } from '#lib/types.ts';
 
 export const SESSION_COOKIE = 'ccm_session';
@@ -9,8 +11,8 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type AuthState = 'disabled' | 'setup' | 'anonymous' | 'authenticated';
 
-/** Stand-in user when CCM_AUTH=disabled. */
-const OPEN_USER: User = { id: 'open', email: 'admin', name: 'Admin', createdAt: new Date(0).toISOString(), lastLoginAt: null };
+/** Stand-in user when sign-in is off. */
+const OPEN_USER: User = { id: 'open', email: 'admin', name: 'Admin', role: 'admin', source: 'local', createdAt: new Date(0).toISOString(), lastLoginAt: null };
 
 let bootstrapped = false;
 
@@ -31,7 +33,9 @@ function bootstrapAdmin() {
 export function authenticateToken(token: string | undefined): { state: AuthState; user: User | null } {
 	if (config.authDisabled) return { state: 'disabled', user: OPEN_USER };
 	if (!bootstrapped) bootstrapAdmin();
+	// The local admin comes first, even when sign-in will be off: it owns the settings.
 	if (countUsers() === 0) return { state: 'setup', user: null };
+	if (!signInRequired()) return { state: 'disabled', user: OPEN_USER };
 	const user = token ? authSessionUser(sha256(token)) : undefined;
 	return user ? { state: 'authenticated', user } : { state: 'anonymous', user: null };
 }
@@ -77,4 +81,21 @@ export function throttled(key: string): boolean {
 	recent.push(now);
 	attempts.set(key, recent);
 	return recent.length > 10;
+}
+
+/**
+ * Forward auth: a trusted reverse proxy signed the person in and says who it is in headers.
+ * Returns the user to sign in as, or null when the request doesn't carry a usable identity.
+ * Headers from anywhere else are ignored, or anyone could claim to be anyone.
+ */
+export function proxyIdentity(headers: Headers, clientAddress: string | undefined): { user: User } | { denied: string } | null {
+	const s = getAuthSettings();
+	if (!s.proxy.enabled || !clientAddress || !ipMatches(clientAddress, s.proxy.trustedProxies)) return null;
+	const email = headers.get(s.proxy.emailHeader)?.trim();
+	if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null;
+	const groups = (s.proxy.groupsHeader && headers.get(s.proxy.groupsHeader)?.split(/[,|]/).map((g) => g.trim()).filter(Boolean)) || [];
+	const { allowed, admin } = accessFor(s.access, email, groups);
+	if (!allowed) return { denied: `${email} isn't allowed to sign in to cc·modern` };
+	const name = (s.proxy.nameHeader && headers.get(s.proxy.nameHeader)?.trim()) || null;
+	return { user: upsertExternalUser({ email, name, source: 'proxy', admin }) };
 }

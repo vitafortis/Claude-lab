@@ -69,8 +69,9 @@
 	const ordered = $derived(sortForOverview(sessions.list, sessions.live));
 
 	async function logout() {
-		await api.post('/api/auth/logout');
-		goto('/login');
+		const r = await api.post<{ redirect: string | null }>('/api/auth/logout');
+		if (r.redirect) location.href = r.redirect;
+		else goto('/login');
 	}
 
 	function onkeydown(e: KeyboardEvent) {

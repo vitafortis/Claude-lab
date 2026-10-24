@@ -34,6 +34,8 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 			throw new BadRequest('The public URL must start with http:// or https://');
 		}
 	}
+	const githubClientId = typeof b.githubClientId === 'string' ? b.githubClientId.trim() : cur.githubClientId;
+	if (githubClientId && !/^[A-Za-z0-9._-]{8,80}$/.test(githubClientId)) throw new BadRequest('That doesn’t look like a GitHub OAuth client ID');
 	saveSettings({
 		sessionImage,
 		agentsImage,
@@ -44,7 +46,8 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 		defaultPermissionMode: parsePermissionMode(b.defaultPermissionMode),
 		defaultRemoteControl: b.defaultRemoteControl !== false,
 		extraEnv,
-		publicUrl
+		publicUrl,
+		githubClientId
 	});
 	return json({ settings: getSettings() });
 });

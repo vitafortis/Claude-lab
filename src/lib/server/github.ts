@@ -6,7 +6,7 @@
 import { randomToken } from './crypto.ts';
 import { config } from './config.ts';
 import { BadRequest } from './http.ts';
-import { getGithubToken, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
+import { getGithubToken, getSettings, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
 import type { GithubAccount, GithubPull, GithubRepo, SessionPr } from '#lib/types.ts';
 
 const API = 'https://api.github.com';
@@ -176,7 +176,9 @@ export async function findPrForBranch(account: GithubAccount | null, fullName: s
 type Pending = { deviceCode: string; interval: number; expiresAt: number };
 const pending = new Map<string, Pending>();
 
-export const deviceFlowEnabled = () => !!config.githubClientId;
+const clientId = () => getSettings().githubClientId || config.githubClientId;
+
+export const deviceFlowEnabled = () => !!clientId();
 
 async function postForm<T>(url: string, form: Record<string, string>): Promise<T> {
 	const res = await fetch(url, {
@@ -190,10 +192,10 @@ async function postForm<T>(url: string, form: Record<string, string>): Promise<T
 }
 
 export async function startDeviceFlow() {
-	if (!config.githubClientId) throw new BadRequest('Set CCM_GITHUB_CLIENT_ID to sign in with GitHub, or add a personal access token.');
+	if (!clientId()) throw new BadRequest('Add a GitHub OAuth app under Settings to sign in with GitHub, or add a personal access token.');
 	const r = await postForm<{ device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number; error_description?: string }>(
 		'https://github.com/login/device/code',
-		{ client_id: config.githubClientId, scope: 'repo read:org workflow' }
+		{ client_id: clientId()!, scope: 'repo read:org workflow' }
 	);
 	if (!r.device_code) throw new BadRequest(r.error_description ?? 'GitHub did not start the sign-in');
 	const handle = randomToken(16);
@@ -209,7 +211,7 @@ export async function pollDeviceFlow(handle: string): Promise<{ state: 'pending'
 		return { state: 'expired' };
 	}
 	const r = await postForm<{ access_token?: string; error?: string; interval?: number }>('https://github.com/login/oauth/access_token', {
-		client_id: config.githubClientId!,
+		client_id: clientId()!,
 		device_code: p.deviceCode,
 		grant_type: 'urn:ietf:params:oauth:grant-type:device_code'
 	});

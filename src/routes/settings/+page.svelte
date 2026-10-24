@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { Box, CircleCheck, CircleX, Container, Download, HardDrive, LoaderCircle, Save } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import SettingsTabs from '#lib/components/SettingsTabs.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago } from '#lib/client/format.ts';
@@ -85,9 +86,10 @@
 {/snippet}
 
 <div class="h-full overflow-y-auto">
-	<PageHeader title="Settings" description="Where sessions run, and what every session container gets." />
+	<PageHeader title="Settings" description="Where sessions run, what every session container gets, and who can sign in." />
+	<SettingsTabs admin={data.admin} />
 
-	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
+	<div class="max-w-4xl space-y-8 px-4 pt-6 pb-12 sm:px-8">
 		<section class="grid gap-3 md:grid-cols-3">
 			<div class="card p-4">
 				<p class="flex items-center gap-2 text-[0.8125rem] font-medium"><Container class="size-4 text-muted-foreground" />Docker {@render check(status?.docker.ok)}</p>
@@ -172,7 +174,14 @@
 				<div class="sm:col-span-2">
 					<label class="label" for="pub">Public URL</label>
 					<input id="pub" class="input font-mono text-xs" placeholder="Where you open cc·modern, e.g. https://cc.home.arpa" bind:value={form.publicUrl} />
-					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments. Empty: the address you last opened cc·modern at.</p>
+					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments and the SSO callback. Empty: the address you last opened cc·modern at.</p>
+				</div>
+				<div class="sm:col-span-2">
+					<label class="label" for="ghc">GitHub OAuth app <span class="font-normal text-muted-foreground">· optional</span></label>
+					<input id="ghc" class="input font-mono text-xs" placeholder="Client ID, e.g. Ov23li…" bind:value={form.githubClientId} />
+					<p class="mt-1.5 text-xs text-muted-foreground">
+						Adds <b class="font-medium text-foreground">Sign in with GitHub</b> under Accounts. Create an OAuth app (GitHub → Settings → Developer settings) with <i>Enable Device Flow</i> checked; no secret or callback URL needed. Without it, add personal access tokens.
+					</p>
 				</div>
 				<div class="sm:col-span-2">
 					<label class="label" for="env">Extra environment</label>
@@ -196,6 +205,7 @@
 						<label class="label" for="ae">Email</label>
 						<input id="ae" class="input" type="email" bind:value={email} />
 					</div>
+					{#if data.account.source === 'local'}
 					<div>
 						<label class="label" for="cp">Current password</label>
 						<input id="cp" class="input" type="password" autocomplete="current-password" bind:value={currentPassword} />
@@ -204,6 +214,9 @@
 						<label class="label" for="np">New password</label>
 						<input id="np" class="input" type="password" autocomplete="new-password" placeholder="Leave empty to keep" bind:value={newPassword} />
 					</div>
+					{:else}
+						<p class="text-xs text-muted-foreground sm:col-span-2">You sign in through single sign-on, so there's no password here.</p>
+					{/if}
 				</div>
 				<div class="flex justify-end">
 					<button class="btn btn-secondary" disabled={savingAccount}>{#if savingAccount}<LoaderCircle class="animate-spin" />{/if}Update account</button>

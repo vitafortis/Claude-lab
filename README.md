@@ -29,6 +29,7 @@
 - **Model accounts**: sign in with a Claude Pro or Max plan in a terminal right in the browser (`claude auth login`), or add a long-lived token or an API key; run Claude on **Amazon Bedrock**, **Google Vertex AI**, **Microsoft Foundry** or an **LLM gateway** (LiteLLM, Portkey…); or use **OpenAI** (ChatGPT plan or API key) through Codex CLI and **Google** (Google account or Gemini API key) through Gemini CLI, in the same containers and terminals. Sessions of one account share its login, settings and memory, like terminals on one machine.
 - **Profiles**: say which repos go to which model: `acme/*` on Bedrock with Opus, `me/side-*` on Codex, everything else on your subscription. New sessions pick the matching profile's account, model and permissions (you can still change them), and Linear rules can use it too.
 - **GitHub accounts and orgs**: add personal access tokens (or sign in with GitHub through your own OAuth app), browse every repo the token can see across your account and organizations, pick a branch. Sessions get the token for `git push` and `gh pr create`, and commit under your GitHub noreply address.
+- **Sign-in your way**: a local admin account, plus single sign-on with any OpenID Connect provider (Authentik, Authelia, Keycloak, Pocket ID…), or your reverse proxy's forward auth, with email and group rules and admin/member roles. Or turn sign-in off behind a proxy that already does it. All set in the UI.
 - **Encrypted storage**: tokens and keys are sealed with AES-256-GCM and never sent back to the browser.
 - **Command palette**: `⌘K` (`Ctrl+K`) jumps to any session or page.
 - **Light and dark** themes, phone-friendly layout, multi-arch images (`amd64`, `arm64`).
@@ -43,6 +44,10 @@
   <tr>
     <td><img src="docs/screenshots/new-profile.png" alt="New session: the repo matched a profile, which picked a Codex account" /></td>
     <td><img src="docs/screenshots/session-gemini.png" alt="A Gemini CLI session in the browser terminal" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/sign-in.png" alt="Settings → Sign-in and users: password, single sign-on, reverse proxy headers" /></td>
+    <td><img src="docs/screenshots/login-sso.png" alt="The sign-in page with single sign-on" /></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/session.png" alt="A session's terminal with its summary, tasks, git status and conversations" /></td>
@@ -76,13 +81,13 @@ curl -fsSLO https://raw.githubusercontent.com/vitafortis/Claude-lab/main/compose
 docker compose up -d
 ```
 
-Open `http://<your-host>:3050` and create your login. Then:
+Open `http://<your-host>:3050` and create the local admin account. Everything else is set up in the UI; no environment variables are needed. Then:
 
-1. **Accounts → Claude → Add account.** Pick *Claude subscription* and sign in in the terminal that opens: open the link, approve, paste the code back. (Or paste a `claude setup-token` token or an API key.)
+1. **Accounts → Models → Add account.** Pick *Claude subscription* and sign in in the terminal that opens: open the link, approve, paste the code back. (Or a token, an API key, a cloud provider, OpenAI or Google.)
 2. **Accounts → GitHub → Add a token**, for private repos and pushing. Public repos work without one.
 3. **New session**: pick the repo, optionally a branch to start from and a new branch to work on, a first message, the model and the permission mode. **Start session** opens its terminal.
 
-The first start pulls the session image (`ghcr.io/vitafortis/cc-modern-session`), which takes a minute.
+The first start pulls the session image (`ghcr.io/vitafortis/cc-modern-session`), which takes a minute. To put it behind single sign-on or your reverse proxy's login, see [Sign-in](#sign-in).
 
 To build both images from source instead (for example to add tools to the session image):
 
@@ -91,12 +96,29 @@ git clone https://github.com/vitafortis/Claude-lab cc-modern && cd cc-modern
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
+This also builds the Codex and Gemini image; drop the `session-image-all` service from `compose.build.yaml` if you only use Claude.
+
 ### Requirements
 
 - Docker Engine **26 or newer** (sessions mount parts of the `cc-modern-sessions` volume by subpath). On older engines, bind-mount a host folder at `/sessions` and set `CCM_SESSIONS_HOST_PATH` to it.
 - The Docker socket. cc·modern creates, starts and stops session containers, so it needs the real socket, not a read-only proxy.
 
 > **Security.** Whoever can sign in to cc·modern can run code on the Docker host (that is the point of it). Keep it on your LAN or behind a VPN or an authenticating reverse proxy, and use a strong password.
+
+## Sign-in
+
+**Settings → Sign-in & users** (admins only) decides how people get in. The local admin made at setup always works, so a broken SSO setup never locks you out.
+
+- **Password**: the local admin's email and password. The form can be hidden once SSO works; `/login?local` still shows it.
+- **Single sign-on (OpenID Connect)**: a *Sign in with…* button for Authentik, Authelia, Keycloak, Pocket ID, Zitadel, Google, Entra ID and others. Create a confidential web client at your provider with the redirect URI shown on the page (`https://<cc-modern>/api/auth/oidc/callback`), then enter the issuer URL (**Test** checks it), client ID and secret. It uses the authorization code flow with PKCE. Groups come from the `groups` claim, or another one you name (`realm_access.roles` for Keycloak).
+- **Reverse proxy headers (forward auth)**: when Authelia, Authentik's proxy outpost, oauth2-proxy, Tailscale and the like sign people in in front of cc·modern, it trusts `Remote-Email`, `Remote-Name` and `Remote-Groups` (names configurable), but only from the proxy addresses you list (Docker's and LAN ranges by default). Make sure the proxy strips those headers from incoming requests and that port 3050 isn't reachable around it. Set the proxy's logout URL so **Sign out** ends that session too.
+- **Off**: anyone who can reach cc·modern uses it as the admin. Only for a proxy that already signs people in, on a network you trust. `CCM_AUTH=disabled` on the container does the same and overrides the UI (for recovery).
+
+**Who gets in**: SSO and proxy users can be limited to emails, `@domains` or groups, and emails or groups can be made admins. With no rules, everyone your provider lets through gets in. People appear under **Users** the first time they sign in; a local account with the same email becomes that account.
+
+**Roles**: *admins* manage sign-in and users; *members* use everything else (sessions, accounts, automations, settings). The local admin is an admin, and there is always at least one.
+
+**Behind a TLS reverse proxy**, set **Settings → Public URL** to the address people use (e.g. `https://cc.home.arpa`): it's the SSO redirect URI and the link in Linear comments. The proxy must pass `X-Forwarded-Proto` (all common ones do) so sign-in cookies are marked secure, forward WebSocket upgrades on `/ws/`, and not buffer `/api/sessions/live` (Server-Sent Events).
 
 ## How it works
 
@@ -172,7 +194,7 @@ They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vita
 
 Add a **fine-grained token** with access to the repos you want (*Contents* and *Pull requests*: read and write; add *Workflows* to push workflow changes), or a **classic token** with `repo`, `read:org` and `workflow`. cc·modern lists every repository the token can see, grouped by owner, so organizations show up as filters in the repo picker.
 
-**Sign in with GitHub** appears when `CCM_GITHUB_CLIENT_ID` names an OAuth app of yours with *Enable Device Flow* checked (Settings → Developer settings → OAuth Apps). No client secret or callback URL is needed.
+**Sign in with GitHub** appears once **Settings → GitHub OAuth app** names an OAuth app of yours with *Enable Device Flow* checked (GitHub → Settings → Developer settings → OAuth Apps). No client secret or callback URL is needed.
 
 In a session, `GH_TOKEN` is set to the session's GitHub account, so `git clone/push` over https and `gh` work without further setup.
 
@@ -204,24 +226,20 @@ Settings also take a Docker network for session containers (to reach other servi
 
 ## Configuration
 
-All optional. Set them on the `cc-modern` service.
+Everything is configured in the UI. The container takes a few optional variables for things that must be known before the UI is up, or that you'd rather pin:
 
 | Variable | Default | |
 | --- | --- | --- |
-| `CCM_SESSION_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest` | Session image (Settings can override it) |
-| `CCM_AGENTS_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest-all` | Image for Codex and Gemini sessions (Settings can override it) |
-| `CCM_SESSION_NETWORK` | Docker's default bridge | Network for session containers (Settings can override it) |
-| `CCM_GITHUB_CLIENT_ID` | | OAuth app for *Sign in with GitHub* |
-| `CCM_ADMIN_EMAIL`, `CCM_ADMIN_PASSWORD`, `CCM_ADMIN_NAME` | | Create the login on first start instead of the setup screen |
+| `CCM_ADMIN_EMAIL`, `CCM_ADMIN_PASSWORD`, `CCM_ADMIN_NAME` | | Create the local admin on first start instead of the setup screen |
 | `CCM_SECRET_KEY` | random, in `/data/secret.key` | Encryption key for stored tokens |
+| `CCM_AUTH` | | `disabled` turns sign-in off whatever the UI says (recovery) |
+| `CCM_SESSION_IMAGE`, `CCM_AGENTS_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest`, `…:latest-all` | Defaults for **Settings → Image** |
+| `CCM_SESSION_NETWORK` | Docker's default bridge | Default for **Settings → Docker network** |
+| `CCM_GITHUB_CLIENT_ID` | | Default for **Settings → GitHub OAuth app** |
 | `CCM_SESSIONS_VOLUME` / `CCM_SESSIONS_HOST_PATH` | found by inspecting our own container | How session containers reach the `/sessions` data, when auto-detection can't tell |
 | `CCM_SELF_CONTAINER` | the hostname | Our own container, if its hostname was changed |
 | `CCM_INSTANCE` | `cc-modern` | Label on our containers, so two installs can share a Docker host |
 | `CCM_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker endpoint (`tcp://host:2375` works too) |
-| `CCM_AUTH` | | `disabled` skips the login screen (fully trusted networks only) |
-| `PROTOCOL_HEADER`, `HOST_HEADER` | | Behind a TLS reverse proxy: `x-forwarded-proto`, `x-forwarded-host` |
-
-A reverse proxy must pass WebSocket upgrades on `/ws/` (Traefik and Caddy do by default; for nginx add the `Upgrade`/`Connection` headers) and not buffer `/api/sessions/live` (Server-Sent Events).
 
 ## Development
 

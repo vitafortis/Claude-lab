@@ -282,8 +282,10 @@ export interface Settings {
 	defaultRemoteControl: boolean;
 	/** Extra KEY=value lines passed to every session container. */
 	extraEnv: string;
-	/** How cc·modern is reached from a browser, for links in Linear comments. */
+	/** How cc·modern is reached from a browser: links in Linear comments, the SSO callback. */
 	publicUrl: string;
+	/** A GitHub OAuth app (device flow enabled) for "Sign in with GitHub". */
+	githubClientId: string;
 }
 
 export interface Viewer {
@@ -291,10 +293,56 @@ export interface Viewer {
 	name: string | null;
 }
 
+export type UserRole = 'admin' | 'member';
+/** local: the email and password made at setup; oidc and proxy: signed in through SSO. */
+export type UserSource = 'local' | 'oidc' | 'proxy';
+
 export interface User {
 	id: string;
 	email: string;
 	name: string | null;
+	/** Admins also manage sign-in and users; members use everything else. */
+	role: UserRole;
+	source: UserSource;
 	createdAt: string;
 	lastLoginAt: string | null;
+}
+
+/** Sign-in settings, managed under Settings → Sign-in. */
+export interface AuthSettings {
+	/** Off: anyone who can reach cc·modern uses it as the admin, e.g. behind a proxy that already signs people in. */
+	required: boolean;
+	/** Show the email and password form. The local admin can always use /login?local. */
+	passwordForm: boolean;
+	oidc: {
+		enabled: boolean;
+		/** The provider's issuer URL; its /.well-known/openid-configuration is read from there. */
+		issuer: string;
+		clientId: string;
+		/** Whether a client secret is stored (it never leaves the server). */
+		hasSecret: boolean;
+		scopes: string;
+		/** On the button: "Sign in with {label}". */
+		label: string;
+		/** The claim listing the user's groups. */
+		groupsClaim: string;
+	};
+	/** Forward auth: a reverse proxy (Authelia, Authentik, oauth2-proxy…) signs people in and passes headers. */
+	proxy: {
+		enabled: boolean;
+		emailHeader: string;
+		nameHeader: string;
+		groupsHeader: string;
+		/** Only requests from these addresses or CIDR ranges are trusted to set the headers. */
+		trustedProxies: string[];
+		/** Where Sign out goes, to end the proxy's session too. */
+		logoutUrl: string;
+	};
+	/** Who may sign in through SSO, and who becomes an admin. Emails, @domains, or * for anyone. */
+	access: {
+		allowedEmails: string[];
+		allowedGroups: string[];
+		adminEmails: string[];
+		adminGroups: string[];
+	};
 }

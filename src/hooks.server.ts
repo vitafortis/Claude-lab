@@ -1,6 +1,6 @@
 import { json, redirect } from '@sveltejs/kit';
 import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
-import { authenticate } from '#lib/server/auth.ts';
+import { authenticate, proxyIdentity, startSession } from '#lib/server/auth.ts';
 import { publicUrl } from '#lib/server/origin.ts';
 import { startLinear } from '#lib/server/linear.ts';
 import { startLive } from '#lib/server/sessions/live.ts';
@@ -41,12 +41,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.origin = visible.origin;
 	event.locals.secure = visible.protocol === 'https:';
 
-	const { state, user } = authenticate(event.cookies);
-	event.locals.auth = state;
-	event.locals.user = user;
 	try {
 		event.locals.ip = event.getClientAddress();
 	} catch {}
+	let { state, user } = authenticate(event.cookies);
+
+	// Signed in by the reverse proxy: start (or switch) our own session to match, so the
+	// terminal WebSockets, which only carry the cookie, are signed in too.
+	if (state === 'anonymous' || state === 'authenticated') {
+		const id = proxyIdentity(event.request.headers, event.locals.ip);
+		if (id && 'denied' in id) return new Response(id.denied, { status: 403 });
+		if (id && id.user.id !== user?.id) {
+			startSession(event.cookies, id.user.id, visible.protocol === 'https:');
+			state = 'authenticated';
+			user = id.user;
+		}
+	}
+	event.locals.auth = state;
+	event.locals.user = user;
 
 	if (!PUBLIC.some((p) => pathname.startsWith(p))) {
 		if (state === 'setup') {

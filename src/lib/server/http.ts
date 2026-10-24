@@ -15,12 +15,20 @@ export function handler<E>(fn: (event: E) => Promise<Response> | Response) {
 			if (err instanceof BadRequest) return json({ message: err.message }, { status: 400 });
 			if (err instanceof NotFound) return json({ message: err.message }, { status: 404 });
 			if (err instanceof Conflict) return json({ message: err.message }, { status: 409 });
+			if (err instanceof Forbidden) return json({ message: err.message }, { status: 403 });
 			if (err && typeof err === 'object' && 'status' in err && 'location' in err) throw err;
 			if (err instanceof DockerError) return json({ message: err.message }, { status: 502 });
 			console.error('[cc-modern]', err);
 			return json({ message: err instanceof Error ? err.message : String(err) }, { status: 500 });
 		}
 	};
+}
+
+export class Forbidden extends Error {}
+
+/** Sign-in and user management are for admins (the local admin, or SSO admins). */
+export function requireAdmin(locals: App.Locals) {
+	if (locals.user?.role !== 'admin') throw new Forbidden('Only an admin can change this');
 }
 
 /** The request's JSON body as an object, or a 400. */

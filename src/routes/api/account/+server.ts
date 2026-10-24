@@ -15,6 +15,8 @@ export const PUT: RequestHandler = handler(async ({ request, locals, cookies }) 
 	const patch: Parameters<typeof updateUser>[1] = {};
 	if (typeof b.name === 'string') patch.name = b.name.trim() || null;
 	if (typeof b.email === 'string' && b.email.trim() !== user.email) {
+		// SSO decides who someone is; a changed email would come back as another user.
+		if (user.source !== 'local') throw new BadRequest('Your email comes from single sign-on; change it there');
 		const email = b.email.trim();
 		if (!EMAIL.test(email)) throw new BadRequest('Enter a valid email address');
 		const taken = findUserByEmail(email);
