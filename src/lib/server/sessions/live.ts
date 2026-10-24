@@ -44,7 +44,7 @@ async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 's
 		if (p.git || withGit) gitCache.set(s.id, p.git);
 		const rcUrl = findRcUrl(p.lines) ?? s.rcUrl;
 		if (rcUrl !== s.rcUrl) setSessionRcUrl(s.id, rcUrl);
-		return { state: paneState(p.command, p.lines), tail: p.lines.slice(-40), rcUrl, git: gitCache.get(s.id) ?? null };
+		return { state: paneState(p.command, p.lines, s.agent), tail: p.lines.slice(-40), rcUrl, git: gitCache.get(s.id) ?? null };
 	} catch {
 		return { state: 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, git: gitCache.get(s.id) ?? null };
 	}
@@ -60,7 +60,8 @@ async function pollOnce() {
 			void checkPr(s, p.git);
 			let summary = null;
 			try {
-				summary = latestSummary(s);
+				// Transcripts are Claude Code's; Codex and Gemini show their state on screen.
+				if (s.agent === 'claude') summary = latestSummary(s);
 			} catch {}
 			return { id: s.id, status: s.status, ...p, summary, aiSummary: readAiSummary(s.id), at: new Date().toISOString() };
 		})

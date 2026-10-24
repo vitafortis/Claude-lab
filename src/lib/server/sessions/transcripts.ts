@@ -9,8 +9,8 @@ const MAX_READ = 24 * 1024 * 1024;
 
 type FileInfo = { path: string; id: string; mtimeMs: number; size: number };
 
-function transcriptFiles(s: Pick<Session, 'id' | 'claudeAccountId'>): FileInfo[] {
-	const dir = conversationsDir(s.claudeAccountId, s.id);
+function transcriptFiles(s: Pick<Session, 'id' | 'accountId'>): FileInfo[] {
+	const dir = conversationsDir(s.accountId, s.id);
 	let names: string[];
 	try {
 		names = readdirSync(dir);
@@ -42,14 +42,14 @@ function readTail(f: FileInfo, max = MAX_READ): string {
 	return len < f.size ? text.slice(text.indexOf('\n') + 1) : text;
 }
 
-export function hasConversations(s: Pick<Session, 'id' | 'claudeAccountId'>): boolean {
+export function hasConversations(s: Pick<Session, 'id' | 'accountId'>): boolean {
 	return transcriptFiles(s).length > 0;
 }
 
 const cache = new Map<string, { mtimeMs: number; size: number; summary: TranscriptSummary }>();
 
 /** A summary of the session's newest conversation, re-read only when the file changed. */
-export function latestSummary(s: Pick<Session, 'id' | 'claudeAccountId'>): TranscriptSummary | null {
+export function latestSummary(s: Pick<Session, 'id' | 'accountId'>): TranscriptSummary | null {
 	const f = transcriptFiles(s)[0];
 	if (!f) return null;
 	const hit = cache.get(f.path);
@@ -59,7 +59,7 @@ export function latestSummary(s: Pick<Session, 'id' | 'claudeAccountId'>): Trans
 	return summary;
 }
 
-export function listConversations(s: Pick<Session, 'id' | 'claudeAccountId'>): Conversation[] {
+export function listConversations(s: Pick<Session, 'id' | 'accountId'>): Conversation[] {
 	return transcriptFiles(s)
 		.slice(0, 50)
 		.map((f) => {
@@ -70,7 +70,7 @@ export function listConversations(s: Pick<Session, 'id' | 'claudeAccountId'>): C
 }
 
 /** Recent turns of the newest conversation as plain text (for an AI summary). */
-export function latestExcerpt(s: Pick<Session, 'id' | 'claudeAccountId'>): string | null {
+export function latestExcerpt(s: Pick<Session, 'id' | 'accountId'>): string | null {
 	const f = transcriptFiles(s)[0];
 	return f ? excerpt(readTail(f)) : null;
 }

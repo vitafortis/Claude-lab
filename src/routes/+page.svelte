@@ -27,7 +27,7 @@
 	});
 
 	const steps = $derived([
-		{ done: data.claudeAccounts > 0, label: 'Connect a Claude account', hint: 'Sign in with your Pro or Max plan, or add an API key', href: '/accounts', icon: KeyRound },
+		{ done: data.accounts > 0, label: 'Connect a Claude account', hint: 'Sign in with your Pro or Max plan, or add an API key', href: '/accounts', icon: KeyRound },
 		{ done: data.githubAccounts > 0, label: 'Connect GitHub', hint: 'For private repos and pushing. Public repos work without', href: '/accounts#github', icon: GitBranch },
 		{ done: sessions.list.length > 0, label: 'Start a session', hint: 'Pick a repo; Claude starts in its own container', href: '/new', icon: TerminalSquare }
 	]);

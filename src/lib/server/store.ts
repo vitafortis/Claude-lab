@@ -5,14 +5,16 @@ import { randomUUID } from 'node:crypto';
 import { config } from './config.ts';
 import { decrypt, encrypt } from './crypto.ts';
 import { slugify } from '#lib/launch.ts';
+import { ACCOUNT_KINDS, kindAgent } from '#lib/providers.ts';
 import type {
-	ClaudeAccount,
-	ClaudeAuthKind,
+	ModelAccount,
+	AccountKind,
 	GithubAccount,
 	LinearRef,
 	LinearRule,
 	LinearRun,
 	PermissionMode,
+	Profile,
 	Session,
 	SessionInput,
 	SessionKind,
@@ -126,6 +128,20 @@ function migrate(h: DatabaseSync) {
 	add('linear_issue_id', 'TEXT');
 	add('linear_identifier', 'TEXT');
 	add('linear_url', 'TEXT');
+	const accountCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('claude_accounts')`).all() as { name: string }[]).map((c) => c.name));
+	if (!accountCols.has('config')) h.exec(`ALTER TABLE claude_accounts ADD COLUMN config TEXT NOT NULL DEFAULT '{}'`);
+	h.exec(`
+		CREATE TABLE IF NOT EXISTS profiles (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			account_id TEXT NOT NULL REFERENCES claude_accounts(id) ON DELETE CASCADE,
+			model TEXT,
+			permission_mode TEXT NOT NULL DEFAULT 'default',
+			repos TEXT NOT NULL DEFAULT '[]',
+			position INTEGER NOT NULL DEFAULT 0,
+			created_at TEXT NOT NULL
+		);
+	`);
 	h.exec(`
 		CREATE TABLE IF NOT EXISTS linear_rules (
 			id TEXT PRIMARY KEY,
@@ -161,6 +177,8 @@ function migrate(h: DatabaseSync) {
 			PRIMARY KEY (rule_id, issue_id)
 		);
 	`);
+	const ruleCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('linear_rules')`).all() as { name: string }[]).map((c) => c.name));
+	if (!ruleCols.has('profile_id')) h.exec('ALTER TABLE linear_rules ADD COLUMN profile_id TEXT');
 }
 
 type Row = Record<string, unknown>;
@@ -182,6 +200,7 @@ export function setKv(key: string, value: unknown) {
 export function defaultSettings(): Settings {
 	return {
 		sessionImage: config.sessionImage,
+		agentsImage: config.agentsImage,
 		network: config.sessionNetwork,
 		memoryMb: 0,
 		cpus: 0,
@@ -268,59 +287,80 @@ export function deleteUserAuthSessions(userId: string, except?: string) {
 
 // ── Claude accounts ────────────────────────────────────────────────────
 
-function toClaudeAccount(r: Row): ClaudeAccount {
+// Model accounts. (The table keeps its first name, from when every account was a Claude one.)
+
+/** Secrets are stored as one encrypted JSON object; early accounts stored a bare token or key. */
+function readSecrets(r: Row): Record<string, string> {
+	if (!r.secret) return {};
+	const plain = decrypt(r.secret as string, `claude:${r.id}`);
+	try {
+		const v = JSON.parse(plain);
+		if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, string>;
+	} catch {}
+	return r.kind === 'token' ? { token: plain } : { apiKey: plain };
+}
+
+function toAccount(r: Row): ModelAccount {
+	const kind = r.kind as AccountKind;
 	return {
 		id: r.id as string,
 		name: r.name as string,
-		kind: r.kind as ClaudeAuthKind,
+		kind,
+		agent: kindAgent(kind),
+		config: JSON.parse((r.config as string) || '{}'),
+		secrets: Object.keys(readSecrets(r)),
 		email: (r.email as string) ?? null,
 		plan: (r.plan as string) ?? null,
-		status: (r.status as ClaudeAccount['status']) ?? 'unknown',
+		status: (r.status as ModelAccount['status']) ?? 'unknown',
 		checkedAt: (r.checked_at as string) ?? null,
-		createdAt: r.created_at as string,
-		hasSecret: !!r.secret
+		createdAt: r.created_at as string
 	};
 }
 
-export function listClaudeAccounts(): ClaudeAccount[] {
-	return (db().prepare('SELECT * FROM claude_accounts ORDER BY created_at').all() as Row[]).map(toClaudeAccount);
+export function listAccounts(): ModelAccount[] {
+	return (db().prepare('SELECT * FROM claude_accounts ORDER BY created_at').all() as Row[]).map(toAccount);
 }
 
-export function getClaudeAccount(id: string): ClaudeAccount | undefined {
+export function getAccount(id: string): ModelAccount | undefined {
 	const r = db().prepare('SELECT * FROM claude_accounts WHERE id = ?').get(id) as Row | undefined;
-	return r ? toClaudeAccount(r) : undefined;
+	return r ? toAccount(r) : undefined;
 }
 
-export function getClaudeSecret(id: string): string | undefined {
-	const r = db().prepare('SELECT secret FROM claude_accounts WHERE id = ?').get(id) as { secret: string | null } | undefined;
-	return r?.secret ? decrypt(r.secret, `claude:${id}`) : undefined;
+export function getAccountSecrets(id: string): Record<string, string> {
+	const r = db().prepare('SELECT id, kind, secret FROM claude_accounts WHERE id = ?').get(id) as Row | undefined;
+	return r ? readSecrets(r) : {};
 }
 
-export function createClaudeAccount(input: { name: string; kind: ClaudeAuthKind; secret?: string }): ClaudeAccount {
+const sealSecrets = (id: string, secrets: Record<string, string>) =>
+	Object.keys(secrets).length ? encrypt(JSON.stringify(secrets), `claude:${id}`) : null;
+
+export function createAccount(input: { name: string; kind: AccountKind; config: Record<string, string>; secrets: Record<string, string> }): ModelAccount {
 	const id = randomUUID();
-	const secret = input.secret ? encrypt(input.secret, `claude:${id}`) : null;
-	// A token or key is usable right away; a subscription account signs in first.
-	const status = input.kind === 'subscription' ? 'signed_out' : 'unknown';
+	// Sign-in accounts start signed out; the others are checked after saving.
+	const status = ACCOUNT_KINDS[input.kind].signIn ? 'signed_out' : 'unknown';
 	db()
-		.prepare('INSERT INTO claude_accounts (id, name, kind, secret, status, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-		.run(id, input.name, input.kind, secret, status, now());
-	return getClaudeAccount(id)!;
+		.prepare('INSERT INTO claude_accounts (id, name, kind, config, secret, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+		.run(id, input.name, input.kind, JSON.stringify(input.config), sealSecrets(id, input.secrets), status, now());
+	return getAccount(id)!;
 }
 
-export function updateClaudeAccount(id: string, patch: { name?: string; secret?: string }) {
+/** Renames, replaces settings, and replaces the secrets given (empty ones are kept as they were). */
+export function updateAccount(id: string, patch: { name?: string; config?: Record<string, string>; secrets?: Record<string, string> }) {
 	if (patch.name !== undefined) db().prepare('UPDATE claude_accounts SET name = ? WHERE id = ?').run(patch.name, id);
-	if (patch.secret !== undefined) {
-		db().prepare('UPDATE claude_accounts SET secret = ? WHERE id = ?').run(encrypt(patch.secret, `claude:${id}`), id);
+	if (patch.config !== undefined) db().prepare('UPDATE claude_accounts SET config = ? WHERE id = ?').run(JSON.stringify(patch.config), id);
+	if (patch.secrets !== undefined) {
+		const merged = { ...getAccountSecrets(id), ...Object.fromEntries(Object.entries(patch.secrets).filter(([, v]) => v)) };
+		db().prepare('UPDATE claude_accounts SET secret = ? WHERE id = ?').run(sealSecrets(id, merged), id);
 	}
 }
 
-export function setClaudeAuthStatus(id: string, s: { status: ClaudeAccount['status']; email?: string | null; plan?: string | null }) {
+export function setAccountStatus(id: string, s: { status: ModelAccount['status']; email?: string | null; plan?: string | null }) {
 	db()
 		.prepare('UPDATE claude_accounts SET status = ?, email = ?, plan = ?, checked_at = ? WHERE id = ?')
 		.run(s.status, s.email ?? null, s.plan ?? null, now(), id);
 }
 
-export function deleteClaudeAccount(id: string): boolean {
+export function deleteAccount(id: string): boolean {
 	return db().prepare('DELETE FROM claude_accounts WHERE id = ?').run(id).changes > 0;
 }
 
@@ -411,7 +451,7 @@ function toSession(r: Row): Session {
 		repoDir: r.repo_dir as string,
 		baseBranch: (r.base_branch as string) ?? null,
 		newBranch: (r.new_branch as string) ?? null,
-		claudeAccountId: r.claude_account_id as string,
+		accountId: r.claude_account_id as string,
 		githubAccountId: (r.github_account_id as string) ?? null,
 		model: (r.model as string) ?? null,
 		permissionMode: r.permission_mode as PermissionMode,
@@ -421,6 +461,7 @@ function toSession(r: Row): Session {
 		kind: ((r.kind as string) || 'task') as SessionKind,
 		skill: (r.skill as string) ?? null,
 		checkoutPr: (r.checkout_pr as number) ?? null,
+		agent: kindAgent(r.account_kind as AccountKind | null),
 		pr: r.pr_number ? { number: r.pr_number as number, url: r.pr_url as string, state: r.pr_state as SessionPr['state'] } : null,
 		linear: r.linear_issue_id
 			? { issueId: r.linear_issue_id as string, identifier: r.linear_identifier as string, url: r.linear_url as string }
@@ -435,16 +476,19 @@ function toSession(r: Row): Session {
 	};
 }
 
+// The agent follows the account's kind.
+const SESSION_SELECT = 'SELECT s.*, a.kind AS account_kind FROM sessions s LEFT JOIN claude_accounts a ON a.id = s.claude_account_id';
+
 export function listSessions(): Session[] {
-	return (db().prepare('SELECT * FROM sessions ORDER BY COALESCE(last_started_at, created_at) DESC').all() as Row[]).map(toSession);
+	return (db().prepare(`${SESSION_SELECT} ORDER BY COALESCE(s.last_started_at, s.created_at) DESC`).all() as Row[]).map(toSession);
 }
 
 export function getSession(id: string): Session | undefined {
-	const r = db().prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Row | undefined;
+	const r = db().prepare(`${SESSION_SELECT} WHERE s.id = ?`).get(id) as Row | undefined;
 	return r ? toSession(r) : undefined;
 }
 
-export function sessionsUsingClaudeAccount(id: string): number {
+export function sessionsUsingAccount(id: string): number {
 	return (db().prepare('SELECT COUNT(*) AS n FROM sessions WHERE claude_account_id = ?').get(id) as { n: number }).n;
 }
 
@@ -471,7 +515,7 @@ export function createSession(
 			input.repoDir,
 			input.baseBranch,
 			input.newBranch,
-			input.claudeAccountId,
+			input.accountId,
 			input.githubAccountId,
 			input.model,
 			input.permissionMode,
@@ -497,14 +541,14 @@ export function setSessionPr(id: string, pr: SessionPr | null) {
 /** Fields that can change after creation; they apply from the next launch. */
 export function updateSession(
 	id: string,
-	patch: Partial<Pick<Session, 'name' | 'model' | 'permissionMode' | 'remoteControl' | 'claudeAccountId' | 'githubAccountId'>>
+	patch: Partial<Pick<Session, 'name' | 'model' | 'permissionMode' | 'remoteControl' | 'accountId' | 'githubAccountId'>>
 ) {
 	const cols: Record<string, string> = {
 		name: 'name',
 		model: 'model',
 		permissionMode: 'permission_mode',
 		remoteControl: 'remote_control',
-		claudeAccountId: 'claude_account_id',
+		accountId: 'claude_account_id',
 		githubAccountId: 'github_account_id'
 	};
 	for (const [k, v] of Object.entries(patch)) {
@@ -558,11 +602,12 @@ function toRule(r: Row): LinearRule {
 		name: r.name as string,
 		teamId: r.team_id as string,
 		teamKey: r.team_key as string,
+		profileId: (r.profile_id as string) ?? null,
 		label: r.label as string,
 		repo: r.repo as string,
 		githubAccountId: (r.github_account_id as string) ?? null,
 		baseBranch: (r.base_branch as string) ?? null,
-		claudeAccountId: r.claude_account_id as string,
+		accountId: r.claude_account_id as string,
 		model: (r.model as string) ?? null,
 		permissionMode: r.permission_mode as PermissionMode,
 		prompt: r.prompt as string,
@@ -590,11 +635,12 @@ const RULE_COLS = [
 	['name', 'name'],
 	['team_id', 'teamId'],
 	['team_key', 'teamKey'],
+	['profile_id', 'profileId'],
 	['label', 'label'],
 	['repo', 'repo'],
 	['github_account_id', 'githubAccountId'],
 	['base_branch', 'baseBranch'],
-	['claude_account_id', 'claudeAccountId'],
+	['claude_account_id', 'accountId'],
 	['model', 'model'],
 	['permission_mode', 'permissionMode'],
 	['prompt', 'prompt'],
@@ -666,4 +712,54 @@ export function recordLinearRun(run: Omit<LinearRun, 'createdAt'>) {
 			 ON CONFLICT(rule_id, issue_id) DO UPDATE SET session_id = excluded.session_id, status = excluded.status, error = excluded.error`
 		)
 		.run(run.ruleId, run.issueId, run.identifier, run.title, run.url, run.sessionId, run.status, run.error, now());
+}
+
+// ── profiles ───────────────────────────────────────────────────────────
+
+function toProfile(r: Row): Profile {
+	return {
+		id: r.id as string,
+		name: r.name as string,
+		accountId: r.account_id as string,
+		model: (r.model as string) ?? null,
+		permissionMode: r.permission_mode as PermissionMode,
+		repos: JSON.parse((r.repos as string) || '[]'),
+		position: r.position as number
+	};
+}
+
+export type ProfileInput = Omit<Profile, 'id' | 'position'>;
+
+export function listProfiles(): Profile[] {
+	return (db().prepare('SELECT * FROM profiles ORDER BY position, created_at').all() as Row[]).map(toProfile);
+}
+
+export function getProfile(id: string): Profile | undefined {
+	const r = db().prepare('SELECT * FROM profiles WHERE id = ?').get(id) as Row | undefined;
+	return r ? toProfile(r) : undefined;
+}
+
+export function createProfile(input: ProfileInput): Profile {
+	const id = randomUUID();
+	const position = ((db().prepare('SELECT MAX(position) AS p FROM profiles').get() as { p: number | null }).p ?? -1) + 1;
+	db()
+		.prepare('INSERT INTO profiles (id, name, account_id, model, permission_mode, repos, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+		.run(id, input.name, input.accountId, input.model, input.permissionMode, JSON.stringify(input.repos), position, now());
+	return getProfile(id)!;
+}
+
+export function updateProfile(id: string, input: ProfileInput) {
+	db()
+		.prepare('UPDATE profiles SET name = ?, account_id = ?, model = ?, permission_mode = ?, repos = ? WHERE id = ?')
+		.run(input.name, input.accountId, input.model, input.permissionMode, JSON.stringify(input.repos), id);
+}
+
+/** Profiles are matched in this order: the first whose patterns match a repo wins. */
+export function reorderProfiles(ids: string[]) {
+	const stmt = db().prepare('UPDATE profiles SET position = ? WHERE id = ?');
+	ids.forEach((id, i) => stmt.run(i, id));
+}
+
+export function deleteProfile(id: string): boolean {
+	return db().prepare('DELETE FROM profiles WHERE id = ?').run(id).changes > 0;
 }

@@ -71,13 +71,13 @@ if (!status.storage.ok) throw new Error(status.storage.error);
 done(`Docker ${status.docker.version}, ${status.storage.kind === 'volume' ? `volume ${status.storage.name}` : status.storage.hostPath}`);
 
 done = step('create a throwaway Claude account');
-const account = await call('POST', '/api/claude-accounts', { kind: 'subscription', name: 'e2e (no login)' });
+const account = await call('POST', '/api/model-accounts', { kind: 'subscription', name: 'e2e (no login)' });
 done();
 
 let session;
 try {
 	done = step(`start a session on ${REPO}`);
-	session = await call('POST', '/api/sessions', { repo: REPO, claudeAccountId: account.id, name: 'cc-modern e2e', newBranch: 'e2e/smoke', prompt: 'hello' });
+	session = await call('POST', '/api/sessions', { repo: REPO, accountId: account.id, name: 'cc-modern e2e', newBranch: 'e2e/smoke', prompt: 'hello' });
 	await waitFor('the container', async () => (await call('GET', `/api/sessions/${session.id}`)).status === 'running');
 	done();
 
@@ -109,6 +109,6 @@ try {
 		await call('DELETE', `/api/sessions/${session.id}`);
 		done();
 	}
-	await call('DELETE', `/api/claude-accounts/${account.id}`).catch(() => {});
+	await call('DELETE', `/api/model-accounts/${account.id}`).catch(() => {});
 }
 console.log('All good.');

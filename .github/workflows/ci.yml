@@ -33,6 +33,10 @@ jobs:
             context: .
           - name: session
             context: ./session
+            agents: claude
+          - name: session-all
+            context: ./session
+            agents: claude codex gemini
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -40,5 +44,6 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: false
+          build-args: AGENTS=${{ matrix.agents || 'claude' }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

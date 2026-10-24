@@ -1,7 +1,8 @@
 name: Image
 
 # Publishes ghcr.io/<owner>/cc-modern (the app) and ghcr.io/<owner>/cc-modern-session
-# (what sessions run) for linux/amd64 and linux/arm64.
+# (what sessions run) for linux/amd64 and linux/arm64. The session image also comes with
+# Codex CLI and Gemini CLI added, under the same tags with -all (e.g. :latest-all).
 #   push to main  -> :latest, :main, :<major>.<minor>.<run number> (minor from package.json)
 #   tag v1.2.3    -> :1.2.3, :1.2, :1, :latest
 #   weekly        -> rebuilt, so the session image picks up the newest stable Claude Code
@@ -34,6 +35,12 @@ jobs:
           - name: cc-modern-session
             context: ./session
             description: The cc·modern session runtime - Claude Code, tmux, git and gh
+            agents: claude
+          - name: cc-modern-session
+            context: ./session
+            description: The cc·modern session runtime with Claude Code, Codex CLI and Gemini CLI
+            agents: claude codex gemini
+            suffix: -all
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -57,6 +64,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/${{ matrix.name }}
+          flavor: |
+            suffix=${{ matrix.suffix }},onlatest=true
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
@@ -75,6 +84,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: CCM_VERSION=${{ steps.ver.outputs.version }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          build-args: |
+            CCM_VERSION=${{ steps.ver.outputs.version }}
+            AGENTS=${{ matrix.agents }}
+          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}

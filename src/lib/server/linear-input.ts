@@ -1,14 +1,17 @@
 import { BadRequest, str } from './http.ts';
 import { DEFAULT_PROMPT } from './linear.ts';
 import { parseModel, parsePermissionMode } from './sessions/input.ts';
-import { getClaudeAccount, getGithubAccount, type LinearRuleInput } from './store.ts';
+import { getAccount, getGithubAccount, getProfile, type LinearRuleInput } from './store.ts';
 import { isValidBranch, parseRepo } from '#lib/launch.ts';
 
 export function parseRuleInput(b: Record<string, unknown>): LinearRuleInput {
 	const repo = str(b, 'repo', { required: true })!;
 	if (!parseRepo(repo)) throw new BadRequest('Enter the repository as owner/name or an https git URL');
-	const claudeAccountId = str(b, 'claudeAccountId', { required: true })!;
-	if (!getClaudeAccount(claudeAccountId)) throw new BadRequest('Pick a Claude account');
+	const accountId = str(b, 'accountId', { required: true })!;
+	if (!getAccount(accountId)) throw new BadRequest('Pick a model account');
+	let profileId = str(b, 'profileId');
+	if (profileId && profileId !== 'auto' && !getProfile(profileId)) throw new BadRequest('That profile no longer exists');
+	profileId ||= null;
 	const githubAccountId = str(b, 'githubAccountId');
 	if (githubAccountId && !getGithubAccount(githubAccountId)) throw new BadRequest('That GitHub account no longer exists');
 	const baseBranch = str(b, 'baseBranch', { max: 200 });
@@ -20,11 +23,12 @@ export function parseRuleInput(b: Record<string, unknown>): LinearRuleInput {
 		name: str(b, 'name', { max: 80 }) ?? `${teamKey} · ${label}`,
 		teamId,
 		teamKey,
+		profileId,
 		label,
 		repo,
 		githubAccountId,
 		baseBranch,
-		claudeAccountId,
+		accountId,
 		model: parseModel(b.model),
 		permissionMode: parsePermissionMode(b.permissionMode),
 		prompt: str(b, 'prompt', { max: 10_000 }) ?? DEFAULT_PROMPT,

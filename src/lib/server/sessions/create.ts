@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getPull } from '../github.ts';
-import { createSession, getGithubAccount } from '../store.ts';
+import { createSession, getAccount, getGithubAccount } from '../store.ts';
+import { fitPermissionMode } from '#lib/providers.ts';
 import { pokeLive } from './live.ts';
 import { allocateContainerName, startSession } from './runtime.ts';
 import type { LinearRef, Session, SessionInput } from '#lib/types.ts';
@@ -14,6 +15,8 @@ export async function launchNewSession(
 	extra: { linear?: LinearRef } = {}
 ): Promise<Session> {
 	const { prompt, ...rest } = input;
+	const account = getAccount(rest.accountId);
+	if (account) rest.permissionMode = fitPermissionMode(account.agent, rest.permissionMode);
 	if (rest.checkoutPr && rest.repoFullName && !rest.baseBranch) {
 		// A PR from this repo: clone its branch, so commits push straight to the PR.
 		// From a fork (or if GitHub can't say), ccm-launch fetches pull/<n>/head instead.

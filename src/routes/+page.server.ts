@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
-import { listClaudeAccounts, listGithubAccounts } from '#lib/server/store.ts';
+import { listAccounts, listGithubAccounts } from '#lib/server/store.ts';
 
 export const load: PageServerLoad = () => ({
-	claudeAccounts: listClaudeAccounts().length,
+	accounts: listAccounts().length,
 	githubAccounts: listGithubAccounts().length
 });

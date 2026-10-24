@@ -1,24 +1,47 @@
-/** How a Claude account signs in. Only `subscription` (a full claude.ai login) supports Remote Control. */
-export type ClaudeAuthKind = 'subscription' | 'token' | 'api_key';
+/** The terminal agent a session runs. */
+export type Agent = 'claude' | 'codex' | 'gemini';
 
-export const CLAUDE_AUTH_LABEL: Record<ClaudeAuthKind, string> = {
-	subscription: 'Claude subscription',
-	token: 'Long-lived token',
-	api_key: 'API key'
-};
+/** How a model account connects; see ACCOUNT_KINDS in providers.ts. */
+export type AccountKind =
+	| 'subscription'
+	| 'token'
+	| 'api_key'
+	| 'bedrock'
+	| 'vertex'
+	| 'foundry'
+	| 'gateway'
+	| 'chatgpt'
+	| 'openai_api_key'
+	| 'google'
+	| 'gemini_api_key';
 
-export interface ClaudeAccount {
+export interface ModelAccount {
 	id: string;
 	name: string;
-	kind: ClaudeAuthKind;
-	/** From `claude auth status`, once signed in. */
+	kind: AccountKind;
+	agent: Agent;
+	/** Non-secret settings: region, project, base URL, model pins… */
+	config: Record<string, string>;
+	/** Which secret fields are stored (their values never leave the server). */
+	secrets: string[];
+	/** From the agent's own status check, once signed in. */
 	email: string | null;
 	plan: string | null;
 	status: 'signed_in' | 'signed_out' | 'unknown';
 	checkedAt: string | null;
 	createdAt: string;
-	/** A token or key is stored (token / api_key accounts). */
-	hasSecret: boolean;
+}
+
+/** A preset of account, model and permissions, picked automatically for matching repos. */
+export interface Profile {
+	id: string;
+	name: string;
+	accountId: string;
+	model: string | null;
+	permissionMode: PermissionMode;
+	/** owner/name patterns: "acme/*", "acme/api", "*". */
+	repos: string[];
+	position: number;
 }
 
 export interface GithubAccount {
@@ -82,6 +105,8 @@ export interface Session {
 	skill: string | null;
 	/** A pull request checked out at the first start. */
 	checkoutPr: number | null;
+	/** Follows the session's account. */
+	agent: Agent;
 	pr: SessionPr | null;
 	linear: LinearRef | null;
 	repoUrl: string;
@@ -91,7 +116,7 @@ export interface Session {
 	repoDir: string;
 	baseBranch: string | null;
 	newBranch: string | null;
-	claudeAccountId: string;
+	accountId: string;
 	githubAccountId: string | null;
 	model: string | null;
 	permissionMode: PermissionMode;
@@ -115,7 +140,7 @@ export interface SessionInput {
 	repoFullName: string | null;
 	baseBranch: string | null;
 	newBranch: string | null;
-	claudeAccountId: string;
+	accountId: string;
 	githubAccountId: string | null;
 	model: string | null;
 	permissionMode: PermissionMode;
@@ -209,12 +234,14 @@ export interface LinearRule {
 	name: string;
 	teamId: string;
 	teamKey: string;
+	/** null: the account, model and permissions below; "auto": the profile matching the repo; else a profile id. */
+	profileId: string | null;
 	/** Issues with this label start a session. */
 	label: string;
 	repo: string;
 	githubAccountId: string | null;
 	baseBranch: string | null;
-	claudeAccountId: string;
+	accountId: string;
 	model: string | null;
 	permissionMode: PermissionMode;
 	/** First message; {identifier} {title} {description} {url} {branch} are filled in. */
@@ -243,6 +270,8 @@ export interface LinearRun {
 
 export interface Settings {
 	sessionImage: string;
+	/** For Codex and Gemini sessions: an image that also has those CLIs. */
+	agentsImage: string;
 	/** Docker network for session containers (blank: Docker's default bridge). */
 	network: string;
 	/** Per-container limits; 0 means none. */

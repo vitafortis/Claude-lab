@@ -10,19 +10,24 @@ import { BadRequest } from './http.ts';
 import { prEvents } from './sessions/prs.ts';
 import { launchNewSession } from './sessions/create.ts';
 import {
+	getAccount,
 	getKv,
 	getLinearKey,
 	getLinearRule,
+	getProfile,
 	getSettings,
 	hasLinearRun,
 	linearRunForSession,
 	listLinearRules,
+	listProfiles,
 	recordLinearRun,
 	setKv,
 	setLinearKey,
 	setLinearRuleChecked
 } from './store.ts';
 import { isValidBranch, parseRepo } from '#lib/launch.ts';
+import { matchProfile } from '#lib/profiles.ts';
+import { AGENT_LABEL } from '#lib/providers.ts';
 import type { LinearRule, LinearTeam } from '#lib/types.ts';
 
 const POLL_MS = 60_000;
@@ -164,6 +169,9 @@ async function spawn(rule: LinearRule, issue: LinearIssue) {
 	const repo = parseRepo(rule.repo);
 	if (!repo) throw new Error(`"${rule.repo}" isn't a repository`);
 	const branch = isValidBranch(issue.branchName) ? issue.branchName : `claude/${issue.identifier.toLowerCase()}`;
+	// A profile (chosen, or the one matching the repo) stands in for the rule's own choices.
+	const profile = rule.profileId === 'auto' ? matchProfile(listProfiles(), repo.fullName ?? repo.url) : rule.profileId ? getProfile(rule.profileId) : null;
+	const accountId = profile && getAccount(profile.accountId) ? profile.accountId : rule.accountId;
 	const session = await launchNewSession(
 		{
 			name: `${issue.identifier} ${issue.title}`.slice(0, 80).trim(),
@@ -175,10 +183,10 @@ async function spawn(rule: LinearRule, issue: LinearIssue) {
 			repoDir: repo.dir,
 			baseBranch: rule.baseBranch,
 			newBranch: branch,
-			claudeAccountId: rule.claudeAccountId,
+			accountId,
 			githubAccountId: rule.githubAccountId,
-			model: rule.model,
-			permissionMode: rule.permissionMode,
+			model: profile ? profile.model : rule.model,
+			permissionMode: profile?.permissionMode ?? rule.permissionMode,
 			remoteControl: getSettings().defaultRemoteControl,
 			prompt: renderPrompt(rule.prompt, issue, branch)
 		},
@@ -191,7 +199,7 @@ async function spawn(rule: LinearRule, issue: LinearIssue) {
 	if (rule.comment) {
 		const base = publicUrl();
 		const where = base ? `[${session.name}](${base}/s/${session.id})` : `“${session.name}”`;
-		await comment(issue.id, `🤖 Claude started on this in cc·modern: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
+		await comment(issue.id, `🤖 ${AGENT_LABEL[getAccount(accountId)?.agent ?? 'claude']} started on this in cc·modern: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
 	}
 	if (notes.length) console.warn(`[cc-modern] Linear ${issue.identifier}: ${notes.join('; ')}`);
 }

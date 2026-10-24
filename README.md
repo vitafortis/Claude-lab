@@ -8,7 +8,8 @@
   Claude Code sessions on your own hardware.<br />
   Pick a repo, and Claude Code starts in its own container on your homelab, with a terminal in the browser,<br />
   live summaries of every session, Remote Control, and sessions you can stop and pick up again.<br />
-  Label a Linear issue and a session starts on its own; start a session from a skill to review a pull request.
+  Label a Linear issue and a session starts on its own; start a session from a skill to review a pull request.<br />
+  Run Claude through Anthropic, Bedrock, Vertex, Foundry or your gateway, or OpenAI's Codex and Google's Gemini CLI, with profiles deciding which repo goes where.
 </p>
 
 <p align="center">
@@ -25,7 +26,8 @@
 - **Skill sessions**: start a session from a skill or slash command instead of a message: `/code-review 234` on a pull request, `/security-review`, `/simplify`, or the account's own skills. Pick a pull request and the session checks out its branch (or `pull/<n>/head` for a fork). **Review a PR** on the overview starts one in two clicks, and **Session → Run a skill** sends one to a running session.
 - **Pull requests**: when a session's branch has a pull request, its number and state (open, draft, merged, closed) show on the card and link to GitHub.
 - **Remote Control**: sessions on a Claude subscription start with `--remote-control "<name>"`, so they also show up at claude.ai/code and in the Claude app, under the session's name. The overview links straight to them.
-- **Claude accounts**: sign in with a Pro or Max plan in a terminal right in the browser (`claude auth login`), or add a long-lived token (`claude setup-token`) or an API key. Sessions of one account share its login, settings and memory, like terminals on one machine.
+- **Model accounts**: sign in with a Claude Pro or Max plan in a terminal right in the browser (`claude auth login`), or add a long-lived token or an API key; run Claude on **Amazon Bedrock**, **Google Vertex AI**, **Microsoft Foundry** or an **LLM gateway** (LiteLLM, Portkey…); or use **OpenAI** (ChatGPT plan or API key) through Codex CLI and **Google** (Google account or Gemini API key) through Gemini CLI, in the same containers and terminals. Sessions of one account share its login, settings and memory, like terminals on one machine.
+- **Profiles**: say which repos go to which model: `acme/*` on Bedrock with Opus, `me/side-*` on Codex, everything else on your subscription. New sessions pick the matching profile's account, model and permissions (you can still change them), and Linear rules can use it too.
 - **GitHub accounts and orgs**: add personal access tokens (or sign in with GitHub through your own OAuth app), browse every repo the token can see across your account and organizations, pick a branch. Sessions get the token for `git push` and `gh pr create`, and commit under your GitHub noreply address.
 - **Encrypted storage**: tokens and keys are sealed with AES-256-GCM and never sent back to the browser.
 - **Command palette**: `⌘K` (`Ctrl+K`) jumps to any session or page.
@@ -34,6 +36,14 @@
 ## Screenshots
 
 <table>
+  <tr>
+    <td><img src="docs/screenshots/accounts.png" alt="Model accounts from Anthropic, AWS, Google Cloud, OpenAI and Google, and profiles mapping repos to them" /></td>
+    <td><img src="docs/screenshots/accounts-add.png" alt="Adding a model account: every provider, grouped" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/new-profile.png" alt="New session: the repo matched a profile, which picked a Codex account" /></td>
+    <td><img src="docs/screenshots/session-gemini.png" alt="A Gemini CLI session in the browser terminal" /></td>
+  </tr>
   <tr>
     <td><img src="docs/screenshots/session.png" alt="A session's terminal with its summary, tasks, git status and conversations" /></td>
     <td><img src="docs/screenshots/automations.png" alt="Linear automations: a rule and the issues it picked up" /></td>
@@ -107,26 +117,56 @@ Everything a session needs survives its container, in the `cc-modern-sessions` v
 
 | Path in the volume | Mounted in the session at | What |
 | --- | --- | --- |
-| `accounts/<account>/` | `/claude` (`CLAUDE_CONFIG_DIR`) | The Claude account's login, settings, memory and conversation transcripts. Shared by the account's sessions. |
+| `accounts/<account>/` | `/claude` (`CLAUDE_CONFIG_DIR`), `/codex` (`CODEX_HOME`) or `/gemini` (`GEMINI_CLI_HOME`) | The account's login, settings, memory and conversations (and a Vertex service account key). Shared by the account's sessions. |
 | `sessions/<id>/home/` | `/session/home` (`$HOME`) | The session's home folder: shell history, caches, tool configs. |
-| `sessions/<id>/repo/` | `/workspace/<repo>` | The cloned repository, with your uncommitted work. |
+| `sessions/<id>/repo/` | `/workspace/<repo>` (Codex and Gemini: `/workspace/<id>/<repo>`) | The cloned repository, with your uncommitted work. |
 | `sessions/<id>/.ccm/` | `/session/.ccm` | Launch settings and the last AI summary, written by cc·modern. |
 
-Conversations are stored per session (`CLAUDE_CODE_PROJECT_DIR_NAME` is the session id), so two sessions on the same repo never mix their history. Deleting a session removes its folder and its conversations; deleting a Claude account removes its folder.
+Conversations are stored per session (`CLAUDE_CODE_PROJECT_DIR_NAME` is the session id), so two sessions on the same repo never mix their history. Codex and Gemini keep conversations by working directory, so their sessions get a working directory of their own. Deleting a session removes its folder and its Claude conversations; deleting an account removes its folder.
 
 The app's own data (`cc-modern-data`, at `/data`) holds the SQLite store and `secret.key`, the key that encrypts tokens. Back up both volumes, and keep `secret.key` (or set `CCM_SECRET_KEY`), or the stored tokens can't be decrypted.
 
-## Claude accounts
+## Model accounts
 
-| Kind | How | Remote Control | Billing |
-| --- | --- | --- | --- |
-| **Claude subscription** | Sign in from the browser (`claude auth login` in a short-lived container). | ✓ | Your Pro/Max/Team plan |
-| **Long-lived token** | Run `claude setup-token` anywhere, paste the `sk-ant-oat…` token. | ✗ (inference-only token) | Your plan |
-| **API key** | Paste an Anthropic Console key. | ✗ | Per use |
+**Accounts → Add account** groups every kind by vendor.
 
-Remote Control needs a full claude.ai login; Claude Code refuses it for tokens and API keys. The first time a subscription session starts with Remote Control, Claude Code asks you to confirm it once: answer in the session's terminal. **Check** runs `claude auth status` with the account's credentials. For tokens and keys that confirms they're in place, not that they're valid.
+| Kind | Runs | How | Remote Control | Billing |
+| --- | --- | --- | --- | --- |
+| **Claude subscription** | Claude Code | Sign in from the browser (`claude auth login` in a short-lived container). | ✓ | Your Pro/Max/Team plan |
+| **Long-lived token** | Claude Code | Run `claude setup-token` anywhere, paste the `sk-ant-oat…` token. | ✗ | Your plan |
+| **Anthropic API key** | Claude Code | Paste a Claude Console key. | ✗ | Per use |
+| **Amazon Bedrock** | Claude Code | Region, plus a Bedrock API key or an access key and secret. | ✗ | Your AWS account |
+| **Google Vertex AI** | Claude Code | Project, region and a service account key (JSON). | ✗ | Your Google Cloud project |
+| **Microsoft Foundry** | Claude Code | Resource name and API key. | ✗ | Your Azure resource |
+| **LLM gateway** | Claude Code | An Anthropic-compatible base URL and credential (sent as a bearer token or `x-api-key`). The gateway's models show in `/model`. | ✗ | Your gateway |
+| **ChatGPT plan** | Codex CLI | Sign in from the browser (`codex login --device-auth`). | ✗ | Your ChatGPT plan |
+| **OpenAI API key** | Codex CLI | Paste an OpenAI API key. | ✗ | Per use |
+| **Google account** | Gemini CLI | Sign in from the browser (Gemini CLI's Google login). | ✗ | Your Google plan |
+| **Gemini API key** | Gemini CLI | Paste a Google AI Studio key. | ✗ | Per use |
 
-Every session of an account shares that account's Claude configuration, as sessions on one machine share `~/.claude`. Settings you change in one session (`/config`, MCP servers, memory) apply to the others.
+Claude Code only runs Claude models, so OpenAI and Google models run through their vendors' own agents, Codex CLI and Gemini CLI, in the same kind of container, terminal and tmux. Bedrock, Vertex, Foundry and gateway accounts take optional model IDs for the opus, sonnet and haiku aliases, for providers that name models differently.
+
+Remote Control needs a full claude.ai login; Claude Code refuses it for tokens, API keys and cloud providers. The first time a subscription session starts with Remote Control, Claude Code asks you to confirm it once: answer in the session's terminal.
+
+**Check** makes sure an account works: `claude auth status` for Anthropic accounts, a one-line request with a small model for cloud and gateway accounts, `codex login status` for ChatGPT, the sign-in files for Google, and a model listing for OpenAI and Gemini keys (free, but it needs cc·modern itself to reach api.openai.com or generativelanguage.googleapis.com).
+
+Every session of an account shares that account's configuration, as sessions on one machine share `~/.claude`. Settings you change in one session (`/config`, MCP servers, memory) apply to the others.
+
+### Codex and Gemini sessions
+
+They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vitafortis/cc-modern-session:latest-all` (**Settings → Image for Codex and Gemini sessions**, or `CCM_AGENTS_IMAGE`). It's pulled the first time an OpenAI or Google account starts a session, so Claude-only installs never download it.
+
+- The terminal, live state (working, waiting, idle), git status, stop and continue (`codex resume --last`, `gemini --resume latest`) all work as for Claude.
+- The conversation summary, the conversation list, **Summarize**, skills and Remote Control are Claude Code features and only show for Claude sessions.
+- Permission modes map to each agent's own: Codex has *Ask* (`-a on-request`) and *Bypass*; Gemini has *Ask*, *Accept edits*, *Plan* and *Bypass* (`--approval-mode yolo`). Codex's own sandbox can't run inside an unprivileged container, so Codex gets full access to the container, which is the sandbox, and asks before commands unless bypassed.
+- A session keeps its agent: its account can change to another account of the same agent.
+
+### Profiles
+
+**Accounts → Profiles** maps repos to an account, a model and a permission mode. Patterns are `owner/name` with `*` for anything (`acme/*`, `*-infra`, `*`), matched case-insensitively; the first matching profile in the list wins, and the arrows change the order. **Try a repo** shows which profile a repo would get.
+
+- **New session** applies the matching profile as soon as you pick the repo, or the one you choose. The fields stay editable.
+- **Linear rules** take *None* (the rule's own account and permissions), *Match the repo* (the matching profile, else the rule's own settings), or one profile.
 
 ## GitHub
 
@@ -139,7 +179,7 @@ In a session, `GH_TOKEN` is set to the session's GitHub account, so `git clone/p
 ## Linear
 
 1. Create a personal API key in Linear (Settings → Security & access → Personal API keys) and paste it under **Automations**.
-2. **Add rule**: pick the team, the label that hands an issue to Claude (default `claude`), the repository, the Claude and GitHub accounts and the permission mode. The first message is a template with `{identifier}`, `{title}`, `{description}`, `{url}` and `{branch}`. Start it with a skill (`/my-skill {identifier}`) to run one.
+2. **Add rule**: pick the team, the label that hands an issue over (default `claude`), the repository, a profile or the model account, the GitHub account and the permission mode. The first message is a template with `{identifier}`, `{title}`, `{description}`, `{url}` and `{branch}`. Start it with a skill (`/my-skill {identifier}`) to run one.
 3. Label an issue. Within a minute (or on **Check now**) a session starts on Linear's branch name for the issue, the issue moves to In Progress, and a comment links to the session. When Claude opens the pull request, a second comment links to it, and Linear's GitHub integration links the PR to the issue through the branch name and "Fixes ENG-123".
 
 Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open cc·modern at.
@@ -147,7 +187,7 @@ Issues that already had the label when you added the rule are skipped unless you
 ## Sessions
 
 - **Permission modes**: *Ask*, *Accept edits*, *Plan*, *Auto*, or *Bypass*. Bypass skips every prompt; the container limits what Claude can reach, but it still has your GitHub token and network access.
-- **Session settings** (Claude account, GitHub account, model, permission mode, Remote Control) can change later. They apply the next time Claude starts: **Session → Continue newest conversation** restarts Claude in place.
+- **Session settings** (model account, GitHub account, model, permission mode, Remote Control) can change later. They apply the next time the agent starts: **Session → Continue newest conversation** restarts Claude in place.
 - **Stop** removes the container; the repo, uncommitted changes and conversations stay. **Start** (or **Resume** in the overview) brings the session back with the current image and settings.
 - **Git identity**: commits use the GitHub account's name and noreply address, or `Claude <noreply@anthropic.com>` for sessions without a GitHub account.
 - **Conversations** in the session panel lists every saved conversation; **Resume** restarts Claude on that one.
@@ -156,7 +196,7 @@ Issues that already had the label when you added the rule are skipped unless you
 
 ### The session image
 
-`session/Dockerfile` builds on `node:24-trixie-slim` with Claude Code (npm, stable channel), git, gh, tmux, ripgrep, jq, python3 and build tools. Claude Code's auto-updater is off; the image is rebuilt weekly, and **Settings → Pull latest** fetches it (sessions use it from their next start).
+`session/Dockerfile` builds on `node:24-trixie-slim` with Claude Code (npm, stable channel), git, gh, tmux, ripgrep, jq, python3 and build tools. With `--build-arg AGENTS="claude codex gemini"` it also installs Codex CLI and Gemini CLI; that build is published as `:latest-all`. Claude Code's auto-updater is off; the image is rebuilt weekly, and **Settings → Pull latest** fetches it (sessions use it from their next start).
 
 To add languages or tools, build your own image `FROM ghcr.io/vitafortis/cc-modern-session` (or edit `session/Dockerfile` and use `compose.build.yaml`), and set it under **Settings → Session containers → Image**. Keep the `node` user (uid 1000) and the entrypoint.
 
@@ -169,6 +209,7 @@ All optional. Set them on the `cc-modern` service.
 | Variable | Default | |
 | --- | --- | --- |
 | `CCM_SESSION_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest` | Session image (Settings can override it) |
+| `CCM_AGENTS_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest-all` | Image for Codex and Gemini sessions (Settings can override it) |
 | `CCM_SESSION_NETWORK` | Docker's default bridge | Network for session containers (Settings can override it) |
 | `CCM_GITHUB_CLIENT_ID` | | OAuth app for *Sign in with GitHub* |
 | `CCM_ADMIN_EMAIL`, `CCM_ADMIN_PASSWORD`, `CCM_ADMIN_NAME` | | Create the login on first start instead of the setup screen |

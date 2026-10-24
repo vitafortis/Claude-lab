@@ -1,4 +1,4 @@
-import type { GitState, PaneState } from './types.ts';
+import type { Agent, GitState, PaneState } from './types.ts';
 
 const RS = '\x1e';
 
@@ -43,32 +43,44 @@ export function parseGit(porcelain: string, shortstat: string): GitState {
 	return g;
 }
 
-// Claude Code's spinner line ends with "esc to interrupt" while a turn runs.
-const WORKING = /esc to interrupt|ctrl\+c to interrupt/i;
+// The agents' spinner lines while a turn runs: "esc to interrupt" (Claude Code, Codex),
+// "esc to cancel" (Gemini CLI).
+const WORKING = /esc to interrupt|ctrl\+c to interrupt|esc to cancel/i;
 // Questions that block until someone answers: permission prompts, menus, confirmations.
 const WAITING = [
 	/Do you want to (?:proceed|make this edit|create|run|allow|continue)/i,
 	/Would you like to/i,
-	/❯\s*\d+\.\s/,
+	/Allow execution of/i,
+	/Apply this change\?/i,
+	/Trust this folder\?/i,
+	/[❯›●]\s*\d+\.\s/,
 	/\[y\/N\]|\(y\/n\)/i,
 	/Enable Remote Control\?/i,
 	/Press Enter to continue/i,
 	/Paste code here/i
 ];
 
-/** What the pane shows: Claude busy, Claude waiting on a person, Claude idle, or a shell. */
-export function paneState(command: string, lines: string[]): PaneState {
+// The process tmux reports while each agent runs. Codex and Gemini start from npm's node
+// wrappers, so for them "node" is the agent (ccm-launch's own node step takes a moment).
+const AGENT_COMMAND: Record<Agent, RegExp> = {
+	claude: /^claude\b/,
+	codex: /^(?:codex|node)\b/,
+	gemini: /^(?:gemini|node)\b/
+};
+
+/** What the pane shows: the agent busy, waiting on a person, idle, or a shell. */
+export function paneState(command: string, lines: string[], agent: Agent = 'claude'): PaneState {
 	const recent = lines.slice(-25).join('\n');
-	if (/^claude\b/.test(command)) {
+	if (AGENT_COMMAND[agent].test(command)) {
 		if (WORKING.test(recent)) return 'working';
 		if (WAITING.some((r) => r.test(recent))) return 'waiting';
 		return 'idle';
 	}
-	// ccm-launch cloning (git) or seeding config (node) before Claude starts.
+	// ccm-launch cloning (git) or seeding config (node) before the agent starts.
 	if (command === 'git' || command === 'node') return 'starting';
 	if (/^(?:ba|z|da)?sh$/.test(command)) {
-		// ccm-launch prints this when Claude exits; before that, the shell is still launching.
-		return lines.some((l) => l.includes('── Claude exited')) ? 'shell' : 'starting';
+		// ccm-launch prints this when the agent exits; before that, the shell is still launching.
+		return lines.some((l) => /── \w+ exited/i.test(l)) ? 'shell' : 'starting';
 	}
 	return command ? 'unknown' : 'starting';
 }

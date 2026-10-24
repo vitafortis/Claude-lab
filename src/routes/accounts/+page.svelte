@@ -6,8 +6,12 @@
 		Building2,
 		CircleCheck,
 		CircleHelp,
+		ChevronDown,
+		ChevronUp,
 		CircleX,
 		ExternalLink,
+		Layers,
+		Pencil,
 		KeyRound,
 		LoaderCircle,
 		LogIn,
@@ -23,63 +27,99 @@
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago } from '#lib/client/format.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
-	import { CLAUDE_AUTH_LABEL, type ClaudeAccount, type ClaudeAuthKind, type GithubAccount } from '#lib/types.ts';
+	import AgentBadge from '#lib/components/AgentBadge.svelte';
+	import { matchProfile } from '#lib/profiles.ts';
+	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES, fitPermissionMode, type KindSpec } from '#lib/providers.ts';
+	import { PERMISSION_MODES, type AccountKind, type Agent, type GithubAccount, type ModelAccount, type PermissionMode, type Profile } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const welcome = $derived(page.url.searchParams.has('welcome'));
 
-	// ── Claude ──────────────────────────────────────────────────────────
+	// ── Model accounts ──────────────────────────────────────────────────
 
-	const KINDS: { value: ClaudeAuthKind; title: string; body: string }[] = [
-		{ value: 'subscription', title: 'Claude subscription', body: 'Sign in with your Pro or Max plan in a terminal here. Supports Remote Control.' },
-		{ value: 'token', title: 'Long-lived token', body: 'Paste the token from `claude setup-token`. Inference only: no Remote Control.' },
-		{ value: 'api_key', title: 'API key', body: 'Anthropic Console key, billed per use. No Remote Control.' }
-	];
+	const GROUPS = [...new Set(Object.values(ACCOUNT_KINDS).map((k) => k.group))];
+	const kindsIn = (g: string) => (Object.entries(ACCOUNT_KINDS) as [AccountKind, KindSpec][]).filter(([, k]) => k.group === g);
 
+	// The account dialog adds one (any kind) or edits one (its kind is fixed).
+	let editing = $state<ModelAccount | null>(null);
 	let adding = $state(false);
-	let kind = $state<ClaudeAuthKind>('subscription');
+	let kind = $state<AccountKind>('subscription');
 	let name = $state('');
-	let secret = $state('');
+	let fields = $state<Record<string, string>>({});
 	let saving = $state(false);
 	let formError = $state('');
+	const spec = $derived(ACCOUNT_KINDS[kind]);
 
-	let login = $state<ClaudeAccount | null>(null);
+	let login = $state<ModelAccount | null>(null);
 	let loginReady = $state(false);
 	let loginLink = $state<string | null>(null);
 	let finishing = $state(false);
 	let checking = $state<string | null>(null);
 
+	function defaultsFor(k: AccountKind, config: Record<string, string> = {}) {
+		return Object.fromEntries(ACCOUNT_KINDS[k].fields.map((f) => [f.key, f.secret ? '' : (config[f.key] ?? f.default ?? '')]));
+	}
+
 	function openAdd() {
+		editing = null;
 		kind = 'subscription';
-		name = data.claudeAccounts.length ? '' : 'Personal';
-		secret = '';
+		name = data.accounts.length ? '' : 'Personal';
+		fields = defaultsFor(kind);
 		formError = '';
 		adding = true;
 	}
 
-	async function addClaude(e: SubmitEvent) {
+	function openEdit(a: ModelAccount) {
+		editing = a;
+		kind = a.kind;
+		name = a.name;
+		fields = defaultsFor(a.kind, a.config);
+		formError = '';
+		adding = true;
+	}
+
+	function pickKind(k: AccountKind) {
+		kind = k;
+		fields = defaultsFor(k);
+	}
+
+	async function saveAccount(e: SubmitEvent) {
 		e.preventDefault();
 		saving = true;
 		formError = '';
 		try {
-			const a = await api.post<ClaudeAccount>('/api/claude-accounts', { kind, name: name || CLAUDE_AUTH_LABEL[kind], secret: secret || null });
-			adding = false;
-			await invalidateAll();
-			if (a.kind === 'subscription') void startLogin(a);
-			else void check(a);
+			if (editing) {
+				await api.patch<ModelAccount>(`/api/model-accounts/${editing.id}`, { name: name || editing.name, fields });
+				adding = false;
+				const a = editing;
+				await invalidateAll();
+				if (!ACCOUNT_KINDS[a.kind].signIn) void check(a);
+			} else {
+				const a = await api.post<ModelAccount>('/api/model-accounts', { kind, name: name || spec.label, fields });
+				adding = false;
+				await invalidateAll();
+				if (ACCOUNT_KINDS[a.kind].signIn) void startLogin(a);
+				else void check(a);
+			}
 		} catch (err) {
 			formError = errorMessage(err);
 		}
 		saving = false;
 	}
 
-	async function startLogin(a: ClaudeAccount) {
+	const SIGN_IN: Record<Agent, { title: string; help: string }> = {
+		claude: { title: 'Sign in to Claude', help: 'Open the link Claude prints, approve, then paste the code back into the terminal.' },
+		codex: { title: 'Sign in to ChatGPT', help: 'Open the link Codex prints and enter the one-time code shown in the terminal.' },
+		gemini: { title: 'Sign in to Google', help: 'Open the link Gemini prints, approve, then paste the code back into the terminal.' }
+	};
+
+	async function startLogin(a: ModelAccount) {
 		login = a;
 		loginReady = false;
 		loginLink = null;
 		try {
-			await api.post(`/api/claude-accounts/${a.id}/login`);
+			await api.post(`/api/model-accounts/${a.id}/login`);
 			loginReady = true;
 		} catch (err) {
 			login = null;
@@ -92,7 +132,7 @@
 		if (!a) return;
 		finishing = true;
 		try {
-			const r = await api.del<ClaudeAccount>(`/api/claude-accounts/${a.id}/login`);
+			const r = await api.del<ModelAccount>(`/api/model-accounts/${a.id}/login`);
 			if (r.status === 'signed_in') toast('success', `Signed in${r.email ? ` as ${r.email}` : ''}`);
 			else toast('info', 'Not signed in yet', 'Run the sign-in again whenever you like.');
 		} catch (err) {
@@ -103,12 +143,12 @@
 		await invalidateAll();
 	}
 
-	// The link wraps in the terminal; offer it as a button once Claude has printed it.
+	// The link wraps in the terminal; offer it as a button once the agent has printed it.
 	$effect(() => {
 		if (!login || !loginReady || loginLink) return;
 		const id = login.id;
 		const t = setInterval(async () => {
-			const r = await api.get<{ url: string | null }>(`/api/claude-accounts/${id}/login`).catch(() => null);
+			const r = await api.get<{ url: string | null }>(`/api/model-accounts/${id}/login`).catch(() => null);
 			if (r?.url) loginLink = r.url;
 		}, 1500);
 		return () => clearInterval(t);
@@ -116,35 +156,104 @@
 
 	// Closing the page mid-sign-in still cleans up the container.
 	onDestroy(() => {
-		if (login) void api.del(`/api/claude-accounts/${login.id}/login`).catch(() => {});
+		if (login) void api.del(`/api/model-accounts/${login.id}/login`).catch(() => {});
 	});
 
-	async function check(a: ClaudeAccount) {
+	async function check(a: ModelAccount) {
 		checking = a.id;
 		try {
-			const r = await api.post<ClaudeAccount>(`/api/claude-accounts/${a.id}/check`);
-			toast(r.status === 'signed_in' ? 'success' : 'error', r.status === 'signed_in' ? `${a.name} works` : `${a.name} isn't signed in`, r.email ?? undefined);
-			await invalidateAll();
+			const r = await api.post<ModelAccount>(`/api/model-accounts/${a.id}/check`);
+			if (r.status === 'signed_in') toast('success', `${a.name} works`, r.email ?? undefined);
+			else if (r.status === 'signed_out') toast('error', ACCOUNT_KINDS[a.kind].signIn ? `${a.name} isn't signed in` : `${a.name} doesn't work`);
+			else toast('info', `Couldn't tell whether ${a.name} works`);
 		} catch (err) {
-			toast('error', "Couldn't check the account", errorMessage(err));
+			toast('error', `${a.name} doesn't work`, errorMessage(err));
 		}
 		checking = null;
+		await invalidateAll();
 	}
 
-	async function removeClaude(a: ClaudeAccount) {
+	async function removeAccount(a: ModelAccount) {
+		const used = data.profiles.filter((p) => p.accountId === a.id);
 		const ok = await confirmAction({
 			title: `Remove ${a.name}?`,
-			body: 'This deletes its sign-in, settings and stored conversations from this server. Your Claude account itself is not affected.',
+			body:
+				`This deletes its sign-in, keys, settings and stored conversations from this server. The account at ${ACCOUNT_KINDS[a.kind].group} itself is not affected.` +
+				(used.length ? ` ${used.length === 1 ? 'The profile' : 'The profiles'} ${used.map((p) => `“${p.name}”`).join(', ')} will be removed too.` : ''),
 			confirmLabel: 'Remove',
 			danger: true
 		});
 		if (!ok) return;
 		try {
-			await api.del(`/api/claude-accounts/${a.id}`);
+			await api.del(`/api/model-accounts/${a.id}`);
 			await invalidateAll();
 		} catch (err) {
 			toast('error', "Couldn't remove it", errorMessage(err));
 		}
+	}
+
+	function details(a: ModelAccount): string {
+		const label = ACCOUNT_KINDS[a.kind].label;
+		const plan = a.plan && a.plan !== label && !/^[a-z_]+$/.test(a.plan) ? a.plan : null;
+		return [label, a.config.region, a.config.baseUrl, a.email, plan, a.checkedAt && `checked ${ago(a.checkedAt)}`].filter(Boolean).join(' · ');
+	}
+
+	// ── Profiles ────────────────────────────────────────────────────────
+
+	const accountById = $derived(new Map(data.accounts.map((a) => [a.id, a])));
+
+	let profileOpen = $state(false);
+	let profileEditing = $state<Profile | null>(null);
+	let pf = $state({ name: '', accountId: '', model: '', permissionMode: 'default' as PermissionMode, repos: '' });
+	let profileError = $state('');
+	let tryRepo = $state('');
+	const pfAgent = $derived(accountById.get(pf.accountId)?.agent ?? 'claude');
+	const pfModes = $derived(PERMISSION_MODES.filter((m) => AGENT_PERMISSION_MODES[pfAgent].includes(m.value)));
+	const tried = $derived(tryRepo.trim() ? matchProfile(data.profiles, tryRepo.trim()) : undefined);
+
+	function openProfile(p?: Profile) {
+		profileEditing = p ?? null;
+		pf = p
+			? { name: p.name, accountId: p.accountId, model: p.model ?? '', permissionMode: p.permissionMode, repos: p.repos.join('\n') }
+			: { name: '', accountId: data.accounts[0]?.id ?? '', model: '', permissionMode: 'default', repos: '' };
+		profileError = '';
+		profileOpen = true;
+	}
+
+	async function saveProfile(e: SubmitEvent) {
+		e.preventDefault();
+		saving = true;
+		profileError = '';
+		const payload = { ...pf, model: pf.model || null, permissionMode: fitPermissionMode(pfAgent, pf.permissionMode) };
+		try {
+			if (profileEditing) await api.put(`/api/profiles/${profileEditing.id}`, payload);
+			else await api.post('/api/profiles', payload);
+			profileOpen = false;
+			await invalidateAll();
+		} catch (err) {
+			profileError = errorMessage(err);
+		}
+		saving = false;
+	}
+
+	async function moveProfile(i: number, by: number) {
+		const ids = data.profiles.map((p) => p.id);
+		const j = i + by;
+		if (j < 0 || j >= ids.length) return;
+		[ids[i], ids[j]] = [ids[j], ids[i]];
+		try {
+			await api.put('/api/profiles/order', { ids });
+			await invalidateAll();
+		} catch (err) {
+			toast('error', "Couldn't reorder", errorMessage(err));
+		}
+	}
+
+	async function removeProfile(p: Profile) {
+		const ok = await confirmAction({ title: `Delete the profile ${p.name}?`, body: 'Matching repos go back to the account you pick each time. Linear rules that used it fall back to their own settings.', confirmLabel: 'Delete', danger: true });
+		if (!ok) return;
+		await api.del(`/api/profiles/${p.id}`).catch((err) => toast('error', "Couldn't delete it", errorMessage(err)));
+		await invalidateAll();
 	}
 
 	// ── GitHub ──────────────────────────────────────────────────────────
@@ -227,60 +336,106 @@
 
 <svelte:head><title>Accounts · cc·modern</title></svelte:head>
 
-{#snippet statusBadge(a: ClaudeAccount)}
+{#snippet statusBadge(a: ModelAccount)}
+	{@const signIn = ACCOUNT_KINDS[a.kind].signIn}
 	{#if a.status === 'signed_in'}
-		<span class="badge badge-success"><CircleCheck />{a.kind === 'subscription' ? 'Signed in' : 'Ready'}</span>
+		<span class="badge badge-success"><CircleCheck />{signIn ? 'Signed in' : 'Ready'}</span>
 	{:else if a.status === 'signed_out'}
-		<span class="badge badge-warning"><CircleX />Not signed in</span>
+		<span class="badge badge-warning"><CircleX />{signIn ? 'Not signed in' : 'Not working'}</span>
 	{:else}
 		<span class="badge"><CircleHelp />Not checked</span>
 	{/if}
 {/snippet}
 
 <div class="h-full overflow-y-auto">
-	<PageHeader title="Accounts" description="Who sessions run as on Claude, and how they reach GitHub." />
+	<PageHeader title="Accounts" description="The models sessions run on, which repos use which, and how sessions reach GitHub." />
 
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
 		{#if welcome}
 			<div class="card flex items-start gap-3 border-primary/30 p-4 text-[0.8125rem]">
 				<ShieldCheck class="mt-0.5 size-4 shrink-0 text-primary" />
-				<p>You're set up. Connect a Claude account below (and GitHub for private repos), then <a class="text-primary hover:underline" href="/new">start a session</a>.</p>
+				<p>You're set up. Connect a model account below (and GitHub for private repos), then <a class="text-primary hover:underline" href="/new">start a session</a>.</p>
 			</div>
 		{/if}
 
 		<section>
 			<div class="mb-3 flex items-end justify-between gap-3">
 				<div>
-					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Claude</h2>
-					<p class="text-xs text-muted-foreground">Sessions of one account share its login, settings and memory, like terminals on one machine.</p>
+					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Models</h2>
+					<p class="text-xs text-muted-foreground">Claude through Anthropic or your cloud, OpenAI through Codex CLI, Gemini through Gemini CLI. Sessions of one account share its sign-in and settings.</p>
 				</div>
 				<button class="btn btn-secondary btn-sm" onclick={openAdd}><Plus />Add account</button>
 			</div>
 			<div class="card divide-y divide-border">
-				{#each data.claudeAccounts as a (a.id)}
+				{#each data.accounts as a (a.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
 						<span class="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-primary"><KeyRound class="size-4" /></span>
 						<div class="min-w-0 flex-1">
-							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">{a.name} {@render statusBadge(a)}</p>
-							<p class="truncate text-xs text-muted-foreground">
-								{CLAUDE_AUTH_LABEL[a.kind]}{#if a.email} · {a.email}{/if}{#if a.plan} · {a.plan}{/if}{#if a.checkedAt} · checked {ago(a.checkedAt)}{/if}
-							</p>
+							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">{a.name} <AgentBadge agent={a.agent} /> {@render statusBadge(a)}</p>
+							<p class="truncate text-xs text-muted-foreground">{details(a)}</p>
 						</div>
 						<div class="flex items-center gap-1.5">
-							{#if a.kind === 'subscription'}
+							{#if ACCOUNT_KINDS[a.kind].signIn}
 								<button class="btn btn-sm {a.status === 'signed_in' ? 'btn-ghost' : 'btn-primary'}" onclick={() => startLogin(a)}><LogIn />{a.status === 'signed_in' ? 'Sign in again' : 'Sign in'}</button>
 							{/if}
 							<button class="btn btn-ghost btn-sm" disabled={checking === a.id} onclick={() => check(a)}>
 								{#if checking === a.id}<LoaderCircle class="animate-spin" />{:else}<RefreshCw />{/if}Check
 							</button>
-							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Remove" onclick={() => removeClaude(a)}><Trash2 /></button>
+							<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openEdit(a)}><Pencil /></button>
+							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Remove" onclick={() => removeAccount(a)}><Trash2 /></button>
 						</div>
 					</div>
 				{:else}
 					<button class="w-full px-4 py-8 text-center text-[0.8125rem] text-muted-foreground hover:text-foreground" onclick={openAdd}>
-						No Claude accounts yet. <span class="text-primary">Add one →</span>
+						No model accounts yet. <span class="text-primary">Add one →</span>
 					</button>
 				{/each}
+			</div>
+		</section>
+
+		<section id="profiles">
+			<div class="mb-3 flex items-end justify-between gap-3">
+				<div>
+					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Profiles</h2>
+					<p class="text-xs text-muted-foreground">Which repos go to which model. New sessions and Linear rules pick the first profile matching the repo.</p>
+				</div>
+				<button class="btn btn-secondary btn-sm" disabled={!data.accounts.length} onclick={() => openProfile()}><Plus />Add profile</button>
+			</div>
+			<div class="card divide-y divide-border">
+				{#each data.profiles as p, i (p.id)}
+					{@const acct = accountById.get(p.accountId)}
+					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+						<div class="flex flex-col">
+							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match earlier" disabled={i === 0} onclick={() => moveProfile(i, -1)}><ChevronUp /></button>
+							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match later" disabled={i === data.profiles.length - 1} onclick={() => moveProfile(i, 1)}><ChevronDown /></button>
+						</div>
+						<div class="min-w-0 flex-1">
+							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
+								{p.name}
+								{#if acct}<AgentBadge agent={acct.agent} />{/if}
+							</p>
+							<p class="truncate text-xs text-muted-foreground">
+								{acct?.name ?? 'Missing account'} · {p.model ?? 'default model'} · {PERMISSION_MODES.find((m) => m.value === p.permissionMode)?.label}
+							</p>
+							<p class="mt-1 flex flex-wrap gap-1">
+								{#each p.repos as r (r)}<span class="badge font-mono">{r}</span>{:else}<span class="text-xs text-muted-foreground">No repos: only used when picked</span>{/each}
+							</p>
+						</div>
+						<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openProfile(p)}><Pencil /></button>
+						<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeProfile(p)}><Trash2 /></button>
+					</div>
+				{:else}
+					<p class="flex items-center justify-center gap-2 px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
+						<Layers class="size-4" />No profiles. Every session uses the account you pick for it.
+					</p>
+				{/each}
+				{#if data.profiles.length}
+					<div class="flex flex-wrap items-center gap-2 bg-surface px-4 py-2.5 text-xs">
+						<label for="try" class="text-muted-foreground">Try a repo</label>
+						<input id="try" class="input h-7 max-w-56 font-mono text-xs" placeholder="owner/name" bind:value={tryRepo} />
+						{#if tried !== undefined}<span class="text-muted-foreground">→ {#if tried}<b class="font-medium text-foreground">{tried.name}</b>{:else}no profile: picked by hand{/if}</span>{/if}
+					</div>
+				{/if}
 			</div>
 		</section>
 
@@ -320,46 +475,79 @@
 	</div>
 </div>
 
-<Dialog bind:open={adding} title="Add a Claude account" width="max-w-xl">
-	<form id="add-claude" class="space-y-4" onsubmit={addClaude}>
-		<div class="grid gap-2">
-			{#each KINDS as k (k.value)}
-				<label class="flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors {kind === k.value ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}">
-					<input type="radio" name="kind" value={k.value} bind:group={kind} class="mt-1 accent-[var(--primary)]" />
-					<span>
-						<span class="block text-[0.8125rem] font-medium">{k.title}</span>
-						<span class="block text-xs text-muted-foreground">{k.body}</span>
-					</span>
-				</label>
+<Dialog bind:open={adding} title={editing ? `Edit ${editing.name}` : 'Add a model account'} width="max-w-2xl">
+	<form id="add-account" class="space-y-4" onsubmit={saveAccount}>
+		{#if !editing}
+			{#each GROUPS as g (g)}
+				<div>
+					<p class="mb-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>
+					<div class="grid gap-2 sm:grid-cols-2">
+						{#each kindsIn(g) as [value, k] (value)}
+							<label class="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors {kind === value ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}">
+								<input type="radio" name="kind" {value} checked={kind === value} onchange={() => pickKind(value)} class="mt-1 accent-[var(--primary)]" />
+								<span class="min-w-0">
+									<span class="block text-[0.8125rem] font-medium">{k.label}</span>
+									<span class="block text-xs text-muted-foreground">{k.description}</span>
+								</span>
+							</label>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		{:else}
+			<p class="flex items-center gap-2 text-[0.8125rem]"><AgentBadge agent={spec.agent} />{spec.label}</p>
+		{/if}
+		<div class="grid gap-3 sm:grid-cols-2">
+			<div class="sm:col-span-2">
+				<label class="label" for="aname">Name</label>
+				<input id="aname" class="input" placeholder="Personal, Work…" bind:value={name} />
+			</div>
+			{#each spec.fields as f (f.key)}
+				<div class={f.multiline || f.options || f.key === 'baseUrl' ? 'sm:col-span-2' : ''}>
+					<label class="label" for="f-{f.key}">{f.label}{#if !f.required}<span class="font-normal text-muted-foreground"> · optional</span>{/if}</label>
+					{#if f.options}
+						<select id="f-{f.key}" class="input" bind:value={fields[f.key]}>
+							{#each f.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+						</select>
+					{:else if f.multiline}
+						<textarea
+							id="f-{f.key}"
+							class="input min-h-28 py-2 font-mono text-xs"
+							placeholder={editing?.secrets.includes(f.key) ? 'Stored. Paste a new one to replace it.' : f.placeholder}
+							bind:value={fields[f.key]}
+						></textarea>
+					{:else}
+						<input
+							id="f-{f.key}"
+							class="input {f.secret || f.key.endsWith('Model') ? 'font-mono text-xs' : ''}"
+							type={f.secret ? 'password' : 'text'}
+							autocomplete="off"
+							placeholder={f.secret && editing?.secrets.includes(f.key) ? '•••••••• stored; type to replace' : f.placeholder}
+							bind:value={fields[f.key]}
+						/>
+					{/if}
+					{#if f.help}<p class="mt-1 text-xs text-muted-foreground">{f.help}</p>{/if}
+				</div>
 			{/each}
 		</div>
-		<div>
-			<label class="label" for="cname">Name</label>
-			<input id="cname" class="input" placeholder="Personal, Work…" bind:value={name} />
-		</div>
-		{#if kind !== 'subscription'}
-			<div>
-				<label class="label" for="secret">{kind === 'token' ? 'Token' : 'API key'}</label>
-				<input id="secret" class="input font-mono text-xs" type="password" autocomplete="off" placeholder={kind === 'token' ? 'sk-ant-oat01-…' : 'sk-ant-api03-…'} bind:value={secret} required />
-				<p class="mt-1.5 text-xs text-muted-foreground">
-					{#if kind === 'token'}Run <code class="font-mono">claude setup-token</code> on any machine signed in to your plan. Stored encrypted.{:else}Create one at console.anthropic.com. Stored encrypted.{/if}
-				</p>
-			</div>
-		{/if}
+		<p class="text-xs text-muted-foreground">
+			{#if spec.signIn}After saving, a terminal opens here to sign in. The sign-in stays in this account's folder on the server.
+			{:else}Keys are stored encrypted and passed to {AGENT_LABEL[spec.agent]} as environment variables. Check sends a tiny request to make sure they work.{/if}
+		</p>
 		{#if formError}<p class="text-xs text-danger">{formError}</p>{/if}
 	</form>
 	{#snippet footer()}
 		<button class="btn btn-ghost" onclick={() => (adding = false)}>Cancel</button>
-		<button class="btn btn-primary" form="add-claude" disabled={saving}>
-			{#if saving}<LoaderCircle class="animate-spin" />{/if}{kind === 'subscription' ? 'Add and sign in' : 'Add account'}
+		<button class="btn btn-primary" form="add-account" disabled={saving}>
+			{#if saving}<LoaderCircle class="animate-spin" />{/if}{editing ? 'Save' : spec.signIn ? 'Add and sign in' : 'Add account'}
 		</button>
 	{/snippet}
 </Dialog>
 
 <Dialog
 	bind:open={() => !!login, (v) => !v && !finishing && finishLogin()}
-	title="Sign in to Claude{login ? ` · ${login.name}` : ''}"
-	description="Open the link Claude prints, approve, then paste the code back into the terminal."
+	title="{login ? SIGN_IN[login.agent].title : ''}{login ? ` · ${login.name}` : ''}"
+	description={login ? SIGN_IN[login.agent].help : ''}
 	width="max-w-4xl"
 >
 	<div class="h-[26rem] overflow-hidden rounded-xl border border-term-edge">
@@ -375,12 +563,52 @@
 		{#if loginLink}
 			<a class="btn btn-secondary btn-sm" href={loginLink} target="_blank" rel="noopener"><ExternalLink />Open the sign-in page</a>
 		{/if}
-		<p class="min-w-0 flex-1 text-xs text-muted-foreground">After approving, copy the code and paste it into the terminal. The login is saved in this account's folder on the server and shared by its sessions.</p>
+		<p class="min-w-0 flex-1 text-xs text-muted-foreground">The login is saved in this account's folder on the server and shared by its sessions.</p>
 	</div>
 	{#snippet footer()}
 		<button class="btn btn-primary" disabled={finishing} onclick={finishLogin}>
 			{#if finishing}<LoaderCircle class="animate-spin" />{/if}Done
 		</button>
+	{/snippet}
+</Dialog>
+
+<Dialog bind:open={profileOpen} title={profileEditing ? `Edit ${profileEditing.name}` : 'Add a profile'} description="Sessions on matching repos start with this account, model and permissions." width="max-w-lg">
+	<form id="profile" class="space-y-3" onsubmit={saveProfile}>
+		<div>
+			<label class="label" for="pname">Name</label>
+			<input id="pname" class="input" placeholder="Work repos on Bedrock, Side projects on Codex…" bind:value={pf.name} required />
+		</div>
+		<div>
+			<label class="label" for="prepos">Repos</label>
+			<textarea id="prepos" class="input min-h-20 py-2 font-mono text-xs" placeholder={'acme/*\nme/side-project\n*-infra'} bind:value={pf.repos}></textarea>
+			<p class="mt-1 text-xs text-muted-foreground">One per line, owner/name. <code class="font-mono">*</code> matches anything; <code class="font-mono">*</code> alone matches every repo.</p>
+		</div>
+		<div>
+			<label class="label" for="pacct">Account</label>
+			<select id="pacct" class="input" bind:value={pf.accountId} required>
+				{#each data.accounts as a (a.id)}<option value={a.id}>{a.name} · {ACCOUNT_KINDS[a.kind].label}</option>{/each}
+			</select>
+		</div>
+		<div class="grid grid-cols-2 gap-3">
+			<div>
+				<label class="label" for="pmodel">Model</label>
+				<input id="pmodel" class="input font-mono text-xs" list="pmodels" placeholder="Default" bind:value={pf.model} />
+				<datalist id="pmodels">
+					{#each ACCOUNT_KINDS[accountById.get(pf.accountId)?.kind ?? 'subscription'].models as m (m)}<option value={m}></option>{/each}
+				</datalist>
+			</div>
+			<div>
+				<label class="label" for="pperm">Permissions</label>
+				<select id="pperm" class="input" bind:value={pf.permissionMode}>
+					{#each pfModes as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
+				</select>
+			</div>
+		</div>
+		{#if profileError}<p class="text-xs text-danger">{profileError}</p>{/if}
+	</form>
+	{#snippet footer()}
+		<button class="btn btn-ghost" onclick={() => (profileOpen = false)}>Cancel</button>
+		<button class="btn btn-primary" form="profile" disabled={saving}>{#if saving}<LoaderCircle class="animate-spin" />{/if}{profileEditing ? 'Save' : 'Add profile'}</button>
 	{/snippet}
 </Dialog>
 

@@ -1,5 +1,6 @@
 import { BadRequest, str } from '../http.ts';
-import { getClaudeAccount, getGithubAccount } from '../store.ts';
+import { getAccount, getGithubAccount } from '../store.ts';
+import { fitPermissionMode } from '#lib/providers.ts';
 import { isValidBranch, parseRepo, type LaunchMode } from '#lib/launch.ts';
 import { PERMISSION_MODES, type PermissionMode, type SessionInput } from '#lib/types.ts';
 
@@ -31,14 +32,16 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 	const repo = parseRepo(str(b, 'repo', { required: true }) ?? '');
 	if (!repo) throw new BadRequest('Enter a GitHub repository (owner/name) or an https git URL');
 
-	const claudeAccountId = str(b, 'claudeAccountId', { required: true })!;
-	if (!getClaudeAccount(claudeAccountId)) throw new BadRequest('Pick a Claude account');
+	const accountId = str(b, 'accountId', { required: true })!;
+	const account = getAccount(accountId);
+	if (!account) throw new BadRequest('Pick a model account');
 	const githubAccountId = str(b, 'githubAccountId');
 	if (githubAccountId && !getGithubAccount(githubAccountId)) throw new BadRequest('That GitHub account no longer exists');
 
 	const kind = b.kind === 'skill' ? 'skill' : 'task';
 	let skill: string | null = null;
 	if (kind === 'skill') {
+		if (account.agent !== 'claude') throw new BadRequest('Skills run in Claude Code. Pick a Claude account for this session.');
 		const command = str(b, 'command', { required: true, max: 82 })!;
 		if (!COMMAND.test(command)) throw new BadRequest('A skill or command starts with "/", e.g. /code-review');
 		const args = (str(b, 'args', { max: 2000 }) ?? '').replace(/\s+/g, ' ');
@@ -67,10 +70,10 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 		repoDir: repo.dir,
 		baseBranch,
 		newBranch,
-		claudeAccountId,
+		accountId,
 		githubAccountId,
 		model: parseModel(b.model),
-		permissionMode: parsePermissionMode(b.permissionMode),
+		permissionMode: fitPermissionMode(account.agent, parsePermissionMode(b.permissionMode)),
 		remoteControl: b.remoteControl !== false,
 		// A skill session's first message is the command itself.
 		prompt: skill ?? str(b, 'prompt', { max: 20_000 })

@@ -133,6 +133,11 @@
 					<input id="img" class="input font-mono text-xs" bind:value={form.sessionImage} />
 					<p class="mt-1.5 text-xs text-muted-foreground">Build your own from <code class="font-mono">session/Dockerfile</code> to add languages and tools.</p>
 				</div>
+				<div class="sm:col-span-2">
+					<label class="label" for="img-all">Image for Codex and Gemini sessions</label>
+					<input id="img-all" class="input font-mono text-xs" bind:value={form.agentsImage} />
+					<p class="mt-1.5 text-xs text-muted-foreground">The same image with Codex CLI and Gemini CLI added (<code class="font-mono">AGENTS="claude codex gemini"</code>). Pulled the first time an OpenAI or Google account is used.</p>
+				</div>
 				<div>
 					<label class="label" for="net">Docker network</label>
 					<input id="net" class="input font-mono text-xs" placeholder="Default bridge" bind:value={form.network} />

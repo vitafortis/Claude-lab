@@ -21,7 +21,10 @@
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago } from '#lib/client/format.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
-	import { CLAUDE_AUTH_LABEL, PERMISSION_MODES, type LinearRule, type LinearTeam, type PermissionMode } from '#lib/types.ts';
+	import { parseRepo } from '#lib/launch.ts';
+	import { matchProfile } from '#lib/profiles.ts';
+	import { ACCOUNT_KINDS, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
+	import { PERMISSION_MODES, type LinearRule, type LinearTeam, type PermissionMode } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -81,11 +84,12 @@
 			name: '',
 			teamId: '',
 			teamKey: '',
+			profileId: data.profiles.length ? 'auto' : null,
 			label: 'claude',
 			repo: '',
 			githubAccountId: data.githubAccounts[0]?.id ?? null,
 			baseBranch: null,
-			claudeAccountId: (data.claudeAccounts.find((a) => a.status === 'signed_in') ?? data.claudeAccounts[0])?.id ?? '',
+			accountId: (data.accounts.find((a) => a.status === 'signed_in') ?? data.accounts[0])?.id ?? '',
 			model: null,
 			permissionMode: 'acceptEdits',
 			prompt: data.defaultPrompt,
@@ -94,6 +98,21 @@
 			enabled: true,
 			pickUpExisting: false
 		};
+	}
+
+	const ruleMatch = $derived.by(() => {
+		const r = parseRepo(form.repo);
+		return r ? matchProfile(data.profiles, r.fullName ?? r.url) : null;
+	});
+	const fixedProfile = $derived(form.profileId && form.profileId !== 'auto' ? (data.profiles.find((p) => p.id === form.profileId) ?? null) : null);
+	const ruleAgent = $derived(data.accounts.find((a) => a.id === form.accountId)?.agent ?? 'claude');
+	const ruleModes = $derived(PERMISSION_MODES.filter((m) => AGENT_PERMISSION_MODES[ruleAgent].includes(m.value)));
+
+	function ruleSummary(rule: LinearRule): string {
+		const profile = rule.profileId && rule.profileId !== 'auto' ? data.profiles.find((p) => p.id === rule.profileId) : null;
+		if (profile) return `Profile ${profile.name}`;
+		const own = `${accountName(rule.accountId)} · ${PERMISSION_MODES.find((m) => m.value === rule.permissionMode)?.label} permissions${rule.model ? ` · ${rule.model}` : ''}`;
+		return rule.profileId === 'auto' ? `The repo's profile, else ${own}` : `As ${own}`;
 	}
 
 	async function openRule(rule: LinearRule | 'new') {
@@ -147,14 +166,14 @@
 		await invalidateAll();
 	}
 
-	const accountName = (id: string) => data.claudeAccounts.find((a) => a.id === id)?.name ?? 'missing account';
+	const accountName = (id: string) => data.accounts.find((a) => a.id === id)?.name ?? 'missing account';
 	const ruleName = (id: string) => data.rules.find((r) => r.id === id)?.name ?? '';
 </script>
 
 <svelte:head><title>Automations · cc·modern</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
-	<PageHeader title="Automations" description="Start sessions from Linear issues: label an issue, and Claude picks it up on its own branch." />
+	<PageHeader title="Automations" description="Start sessions from Linear issues: label an issue, and an agent picks it up on its own branch." />
 
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
 		<section class="card p-5">
@@ -193,7 +212,7 @@
 					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Rules</h2>
 					<p class="text-xs text-muted-foreground">Each new issue that matches a rule gets its own session, on Linear's branch name for it, so the pull request links back.</p>
 				</div>
-				<button class="btn btn-secondary btn-sm" disabled={!data.linear.connected || !data.claudeAccounts.length} onclick={() => openRule('new')}><Plus />Add rule</button>
+				<button class="btn btn-secondary btn-sm" disabled={!data.linear.connected || !data.accounts.length} onclick={() => openRule('new')}><Plus />Add rule</button>
 			</div>
 			<div class="space-y-3">
 				{#each data.rules as rule (rule.id)}
@@ -206,7 +225,7 @@
 								<span class="font-mono text-foreground">{rule.repo}</span>{#if rule.baseBranch}<GitBranch class="size-3" /><span class="font-mono">{rule.baseBranch}</span>{/if}
 							</p>
 							<p class="mt-1 text-[0.6875rem] text-muted-foreground">
-								As {accountName(rule.claudeAccountId)} · {PERMISSION_MODES.find((m) => m.value === rule.permissionMode)?.label} permissions{#if rule.model} · {rule.model}{/if}
+								{ruleSummary(rule)}
 								{#if rule.comment} · comments on the issue{/if}{#if rule.moveToStarted} · moves it to In Progress{/if}
 								{#if rule.lastCheckedAt} · checked {ago(rule.lastCheckedAt)}{/if}
 							</p>
@@ -281,24 +300,38 @@
 				<RepoPicker account={github} bind:value={form.repo} onpick={() => {}} />
 			</div>
 		</div>
-		<div class="grid gap-4 sm:grid-cols-3">
+		<div class="grid gap-4 sm:grid-cols-2">
 			<div>
 				<label class="label" for="rbase">From branch</label>
 				<input id="rbase" class="input font-mono text-xs" placeholder="Default branch" value={form.baseBranch ?? ''} oninput={(e) => (form.baseBranch = e.currentTarget.value || null)} />
 			</div>
 			<div>
-				<label class="label" for="racct">Claude account</label>
-				<select id="racct" class="input" bind:value={form.claudeAccountId} required>
-					{#each data.claudeAccounts as a (a.id)}<option value={a.id}>{a.name} · {CLAUDE_AUTH_LABEL[a.kind]}</option>{/each}
-				</select>
-			</div>
-			<div>
-				<label class="label" for="rperm">Permissions</label>
-				<select id="rperm" class="input" bind:value={form.permissionMode}>
-					{#each PERMISSION_MODES as m (m.value)}<option value={m.value as PermissionMode}>{m.label}</option>{/each}
+				<label class="label" for="rprofile">Profile</label>
+				<select id="rprofile" class="input" bind:value={form.profileId}>
+					<option value={null}>None: use the account below</option>
+					<option value="auto">Match the repo{ruleMatch ? ` (now: ${ruleMatch.name})` : ''}</option>
+					{#each data.profiles as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
 				</select>
 			</div>
 		</div>
+		{#if !fixedProfile}
+			<div class="grid gap-4 sm:grid-cols-2">
+				<div>
+					<label class="label" for="racct">{form.profileId === 'auto' ? 'Account if no profile matches' : 'Account'}</label>
+					<select id="racct" class="input" bind:value={form.accountId} required>
+						{#each data.accounts as a (a.id)}<option value={a.id}>{a.name} · {ACCOUNT_KINDS[a.kind].label}</option>{/each}
+					</select>
+				</div>
+				<div>
+					<label class="label" for="rperm">Permissions</label>
+					<select id="rperm" class="input" bind:value={form.permissionMode}>
+						{#each ruleModes as m (m.value)}<option value={m.value as PermissionMode}>{m.label}</option>{/each}
+					</select>
+				</div>
+			</div>
+		{:else}
+			<p class="-mt-1 text-xs text-muted-foreground">Sessions use {fixedProfile.name}'s account, model and permissions.</p>
+		{/if}
 		<div>
 			<label class="label flex items-center justify-between" for="rprompt">
 				<span>First message</span>

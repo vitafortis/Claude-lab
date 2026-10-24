@@ -14,7 +14,7 @@ import type { Duplex } from 'node:stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { authenticateToken, sessionTokenFromHeader } from '../auth.ts';
 import { execTty } from '../docker.ts';
-import { loginContainer } from '../claude-accounts.ts';
+import { loginContainer } from '../accounts.ts';
 import { runningContainer, workdir } from '../sessions/runtime.ts';
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });

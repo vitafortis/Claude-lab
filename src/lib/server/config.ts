@@ -44,6 +44,8 @@ export const config = {
 	sessionsHostPath: process.env.CCM_SESSIONS_HOST_PATH?.trim() || undefined,
 	/** The image session containers run. Overridable in Settings. */
 	sessionImage: process.env.CCM_SESSION_IMAGE?.trim() || 'ghcr.io/vitafortis/cc-modern-session:latest',
+	/** For Codex and Gemini sessions: the same image with those CLIs added. */
+	agentsImage: process.env.CCM_AGENTS_IMAGE?.trim() || 'ghcr.io/vitafortis/cc-modern-session:latest-all',
 	sessionNetwork: process.env.CCM_SESSION_NETWORK?.trim() || '',
 	/** Labels our containers so several installs can share one Docker host. */
 	instance: process.env.CCM_INSTANCE?.trim() || 'cc-modern',

@@ -1,9 +1,10 @@
 import { json } from '@sveltejs/kit';
-import { body, handler, NotFound } from '#lib/server/http.ts';
+import { BadRequest, body, handler, NotFound } from '#lib/server/http.ts';
+import { AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
 import { parseModel, parseName, parsePermissionMode } from '#lib/server/sessions/input.ts';
 import { pokeLive } from '#lib/server/sessions/live.ts';
 import { deleteSession } from '#lib/server/sessions/runtime.ts';
-import { getClaudeAccount, getGithubAccount, getSession, updateSession } from '#lib/server/store.ts';
+import { getAccount, getGithubAccount, getSession, updateSession } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
 
 function load(id: string) {
@@ -16,21 +17,27 @@ export const GET: RequestHandler = handler(({ params }) => json(load(params.id))
 
 /** Settings that apply from the next launch (Restart Claude, or Stop then Start). */
 export const PATCH: RequestHandler = handler(async ({ params, request }) => {
-	load(params.id);
+	const s = load(params.id);
 	const b = await body(request);
 	const patch: Parameters<typeof updateSession>[1] = {};
 	if ('name' in b) patch.name = parseName(b.name);
 	if ('model' in b) patch.model = parseModel(b.model);
 	if ('permissionMode' in b) patch.permissionMode = parsePermissionMode(b.permissionMode);
 	if ('remoteControl' in b) patch.remoteControl = b.remoteControl !== false;
-	if (typeof b.claudeAccountId === 'string') {
-		if (!getClaudeAccount(b.claudeAccountId)) throw new NotFound('Claude account not found');
-		patch.claudeAccountId = b.claudeAccountId;
+	if (typeof b.accountId === 'string') {
+		const account = getAccount(b.accountId);
+		if (!account) throw new NotFound('Model account not found');
+		// Conversations belong to the agent that had them.
+		if (account.agent !== s.agent) throw new BadRequest(`This session runs ${AGENT_LABEL[s.agent]}. Pick one of its accounts, or start a new session.`);
+		patch.accountId = b.accountId;
 	}
 	if ('githubAccountId' in b) {
 		const gid = typeof b.githubAccountId === 'string' && b.githubAccountId ? b.githubAccountId : null;
 		if (gid && !getGithubAccount(gid)) throw new NotFound('GitHub account not found');
 		patch.githubAccountId = gid;
+	}
+	if (patch.permissionMode && !AGENT_PERMISSION_MODES[s.agent].includes(patch.permissionMode)) {
+		throw new BadRequest(`${AGENT_LABEL[s.agent]} doesn't have that permission mode`);
 	}
 	updateSession(params.id, patch);
 	return json(load(params.id));

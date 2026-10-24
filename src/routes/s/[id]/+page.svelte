@@ -37,10 +37,12 @@
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago } from '#lib/client/format.ts';
-	import { deleteSession, relaunchClaude, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
+	import { deleteSession, relaunchAgent, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
 	import { sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
 	import { displayState } from '#lib/session-state.ts';
-	import { CLAUDE_AUTH_LABEL, PERMISSION_MODES, type Conversation, type Session, type SkillOption } from '#lib/types.ts';
+	import { sessionWorkdir } from '#lib/launch.ts';
+	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
+	import { PERMISSION_MODES, type Conversation, type Session, type SkillOption } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -51,8 +53,13 @@
 	const running = $derived(s.status === 'running');
 	const sum = $derived(live?.summary ?? null);
 	const git = $derived(live?.git ?? null);
-	const account = $derived(data.claudeAccounts.find((a) => a.id === s.claudeAccountId));
-	const rcAvailable = $derived(account?.kind === 'subscription');
+	const account = $derived(data.accounts.find((a) => a.id === s.accountId));
+	const rcAvailable = $derived(!!account && !!ACCOUNT_KINDS[account.kind].remoteControl);
+	const isClaude = $derived(s.agent === 'claude');
+	const agentName = $derived(isClaude ? 'Claude' : AGENT_LABEL[s.agent]);
+	// Switching between agents would leave the conversations behind: keep to the same one.
+	const sameAgentAccounts = $derived(data.accounts.filter((a) => a.agent === s.agent));
+	const permissionModes = $derived(PERMISSION_MODES.filter((m) => AGENT_PERMISSION_MODES[s.agent].includes(m.value)));
 
 	let mode = $state<'claude' | 'shell'>('claude');
 	let panel = $state(true);
@@ -70,7 +77,7 @@
 
 	async function openSkill() {
 		skillOpen = true;
-		skills = await api.get<SkillOption[]>(`/api/skills?account=${s.claudeAccountId}`).catch(() => []);
+		skills = await api.get<SkillOption[]>(`/api/skills?account=${s.accountId}`).catch(() => []);
 	}
 
 	async function runSkill(e: SubmitEvent) {
@@ -102,7 +109,7 @@
 	}
 
 	function launch(l: Launch) {
-		return act(() => (running ? relaunchClaude(s, l) : startSession(s, l)));
+		return act(() => (running ? relaunchAgent(s, l) : startSession(s, l)));
 	}
 
 	function resume(c: Conversation) {
@@ -123,7 +130,7 @@
 	async function patch(body: Partial<Session>) {
 		try {
 			upsertSession(await api.patch<Session>(`/api/sessions/${s.id}`, body));
-			toast('success', 'Saved', running ? 'Applies when Claude restarts.' : undefined);
+			toast('success', 'Saved', running ? `Applies when ${agentName} restarts.` : undefined);
 		} catch (err) {
 			toast('error', "Couldn't save", errorMessage(err));
 		}
@@ -131,7 +138,7 @@
 
 	// Keys for touch screens, as terminal input sequences.
 	const KEYS: { label: string; seq: string; title: string }[] = [
-		{ label: 'Esc', seq: '\x1b', title: 'Escape: interrupt Claude or close a menu' },
+		{ label: 'Esc', seq: '\x1b', title: 'Escape: interrupt the agent or close a menu' },
 		{ label: 'Tab', seq: '\t', title: 'Tab' },
 		{ label: '⇧Tab', seq: '\x1b[Z', title: 'Shift+Tab: cycle permission modes' },
 		{ label: '↑', seq: '\x1b[A', title: 'Up' },
@@ -153,8 +160,8 @@
 	}
 
 	const restartItems = $derived([
-		...(running ? [{ label: 'Run a skill…', hint: 'Type a skill or command into Claude', icon: Wand, onclick: openSkill }, 'separator' as const] : []),
-		{ label: 'Continue newest conversation', hint: 'Restart Claude and pick up where it left off', icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
+		...(running && isClaude ? [{ label: 'Run a skill…', hint: 'Type a skill or command into Claude', icon: Wand, onclick: openSkill }, 'separator' as const] : []),
+		{ label: 'Continue newest conversation', hint: `Restart ${agentName} and pick up where it left off`, icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
 		{ label: 'New conversation', hint: 'Fresh context, same repo and branch', icon: FilePlus2, onclick: () => launch({ mode: 'new' }) },
 		'separator' as const,
 		{ label: running ? 'Stop session' : 'Start session', hint: running ? 'Keeps the repo and conversations' : 'Continue the newest conversation', icon: running ? Square : Play, onclick: () => act(() => (running ? stopSession(s) : startSession(s))) },
@@ -182,7 +189,7 @@
 
 		{#if running}
 			<div class="flex rounded-lg border border-border bg-background p-0.5 text-xs">
-				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'claude' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'claude')}><TerminalSquare class="size-3.5" /><span class="max-sm:hidden">Claude</span></button>
+				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'claude' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'claude')}><TerminalSquare class="size-3.5" /><span class="max-sm:hidden">{agentName}</span></button>
 				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'shell' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'shell')}><SquareTerminal class="size-3.5" /><span class="max-sm:hidden">Shell</span></button>
 			</div>
 		{/if}
@@ -221,7 +228,7 @@
 					{/if}
 					<input
 						class="h-7 min-w-40 flex-1 rounded-md border border-term-edge bg-black/20 px-2.5 text-[0.8125rem] text-[#e6e8ee] outline-none placeholder:text-[#7d8594] focus:border-primary/60"
-						placeholder={mode === 'claude' ? 'Message Claude… (or type in the terminal)' : 'Run a command…'}
+						placeholder={mode === 'claude' ? `Message ${agentName}… (or type in the terminal)` : 'Run a command…'}
 						bind:value={compose}
 					/>
 					<button class="btn btn-sm h-7 border border-term-edge text-[#d5d9e2] hover:bg-white/5" title="Send"><Send /></button>
@@ -258,6 +265,7 @@
 		<!-- Details -->
 		{#if panel}
 			<aside class="w-80 shrink-0 overflow-y-auto border-l border-border bg-surface max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:shadow-surface-lg">
+				{#if isClaude}
 				<section class="space-y-2 border-b border-border p-4">
 					<div class="flex items-center justify-between">
 						<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">Summary</h2>
@@ -279,6 +287,15 @@
 						<p class="text-xs text-muted-foreground">Nothing yet. Once you talk to Claude, the latest exchange shows here.</p>
 					{/if}
 				</section>
+				{:else}
+				<section class="space-y-1.5 border-b border-border p-4">
+					<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">{AGENT_LABEL[s.agent]}</h2>
+					<p class="text-xs text-muted-foreground">
+						{#if live?.tail?.length}Live status comes from the terminal.{/if}
+						Summaries and the conversation list are for Claude Code sessions. {AGENT_LABEL[s.agent]} keeps its own history: Session → Continue newest conversation picks it up again.
+					</p>
+				</section>
+				{/if}
 
 				{#if sum?.todos.length}
 					<section class="border-b border-border p-4">
@@ -308,17 +325,19 @@
 					</section>
 				{/if}
 
-				<section class="border-b border-border p-4">
-					<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><History class="size-3.5" />Conversations</h2>
-					<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} onresume={resume} />
-				</section>
+				{#if isClaude}
+					<section class="border-b border-border p-4">
+						<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><History class="size-3.5" />Conversations</h2>
+						<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} onresume={resume} />
+					</section>
+				{/if}
 
 				<section class="space-y-3 p-4 text-[0.8125rem]">
 					<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">Session</h2>
 					<div>
-						<label class="label" for="acct">Claude account</label>
-						<select id="acct" class="input h-8 text-xs" value={s.claudeAccountId} onchange={(e) => patch({ claudeAccountId: e.currentTarget.value })}>
-							{#each data.claudeAccounts as a (a.id)}<option value={a.id}>{a.name} · {CLAUDE_AUTH_LABEL[a.kind]}</option>{/each}
+						<label class="label" for="acct">{AGENT_LABEL[s.agent]} account</label>
+						<select id="acct" class="input h-8 text-xs" value={s.accountId} onchange={(e) => patch({ accountId: e.currentTarget.value })}>
+							{#each sameAgentAccounts as a (a.id)}<option value={a.id}>{a.name} · {ACCOUNT_KINDS[a.kind].label}</option>{/each}
 						</select>
 					</div>
 					<div>
@@ -336,18 +355,18 @@
 						<div>
 							<label class="label" for="perm">Permissions</label>
 							<select id="perm" class="input h-8 text-xs" value={s.permissionMode} onchange={(e) => patch({ permissionMode: e.currentTarget.value as Session['permissionMode'] })}>
-								{#each PERMISSION_MODES as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
+								{#each permissionModes as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
 							</select>
 						</div>
 					</div>
 					<div class="flex items-center justify-between gap-3">
 						<span>
 							<span class="block font-medium">Remote Control</span>
-							<span class="block text-xs text-muted-foreground">{rcAvailable ? 'claude.ai/code and the Claude app' : 'Needs a subscription login'}</span>
+							<span class="block text-xs text-muted-foreground">{rcAvailable ? 'claude.ai/code and the Claude app' : isClaude ? 'Needs a Claude subscription login' : 'Claude Code only'}</span>
 						</span>
 						<Switch checked={rcAvailable && s.remoteControl} disabled={!rcAvailable} label="Remote Control" onchange={(v) => patch({ remoteControl: v })} />
 					</div>
-					<p class="text-xs text-muted-foreground">Changes apply the next time Claude starts (Session → Continue newest conversation).</p>
+					<p class="text-xs text-muted-foreground">Changes apply the next time {agentName} starts (Session → Continue newest conversation).</p>
 					<div class="space-y-1.5 rounded-lg border border-border bg-background p-2.5">
 						<p class="flex items-center justify-between text-xs">
 							<span class="text-muted-foreground">Container</span>
@@ -356,8 +375,8 @@
 						<button class="flex w-full items-center gap-1.5 text-left font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy: attach to this session from a shell on the Docker host" onclick={() => copyText(attachCommand, 'Copied the attach command')}>
 							<Copy class="size-3 shrink-0" /><span class="truncate">{attachCommand}</span>
 						</button>
-						<button class="flex items-center gap-1.5 font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy the container's working directory" onclick={() => copyText(`/workspace/${s.repoDir}`)}>
-							<Copy class="size-3" />/workspace/{s.repoDir}
+						<button class="flex items-center gap-1.5 font-mono text-[0.6875rem] text-muted-foreground hover:text-foreground" title="Copy the container's working directory" onclick={() => copyText(sessionWorkdir(s))}>
+							<Copy class="size-3" />{sessionWorkdir(s)}
 						</button>
 					</div>
 				</section>

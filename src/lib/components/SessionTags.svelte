@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, SquareKanban, Wand } from '@lucide/svelte';
+	import AgentBadge from './AgentBadge.svelte';
 	import type { Session } from '#lib/types.ts';
 
 	let { session: s }: { session: Session } = $props();
@@ -12,8 +13,10 @@
 	} as const;
 </script>
 
-{#if s.skill || s.linear || s.pr || s.checkoutPr}
+<!-- Claude Code is the default; other agents are called out. -->
+{#if s.skill || s.linear || s.pr || s.checkoutPr || s.agent !== 'claude'}
 	<span class="flex flex-wrap items-center gap-1.5">
+		{#if s.agent !== 'claude'}<AgentBadge agent={s.agent} short />{/if}
 		{#if s.linear}
 			<a class="badge hover:text-foreground" href={s.linear.url} target="_blank" rel="noopener" title="Started from this Linear issue"><SquareKanban />{s.linear.identifier}</a>
 		{/if}

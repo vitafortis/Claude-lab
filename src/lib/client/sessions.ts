@@ -1,6 +1,8 @@
 import { goto } from '$app/navigation';
 import { api, errorMessage } from './api.ts';
 import { confirmAction, removeSessionLocal, toast, upsertSession } from './state.svelte.ts';
+import { sessionWorkdir } from '#lib/launch.ts';
+import { AGENT_LABEL } from '#lib/providers.ts';
 import type { Session } from '#lib/types.ts';
 
 export type Launch = { mode: 'new'; prompt?: string } | { mode: 'continue' } | { mode: 'resume'; conversationId: string };
@@ -22,13 +24,14 @@ export async function stopSession(s: Pick<Session, 'id' | 'name'>) {
 	}
 }
 
-/** Restarts Claude inside the running container (new, continue, or a chosen conversation). */
-export async function relaunchClaude(s: Pick<Session, 'id' | 'name'>, launch?: Launch) {
+/** Restarts the agent inside the running container (new, continue, or a chosen conversation). */
+export async function relaunchAgent(s: Pick<Session, 'id' | 'name' | 'agent'>, launch?: Launch) {
+	const agent = AGENT_LABEL[s.agent];
 	try {
 		await api.post(`/api/sessions/${s.id}/relaunch`, launch ?? {});
-		toast('success', 'Restarted Claude');
+		toast('success', `Restarted ${agent}`);
 	} catch (err) {
-		toast('error', `Couldn't restart Claude`, errorMessage(err));
+		toast('error', `Couldn't restart ${agent}`, errorMessage(err));
 	}
 }
 
@@ -42,11 +45,11 @@ export async function sendToSession(s: Pick<Session, 'id'>, input: { text?: stri
 	}
 }
 
-export async function deleteSession(s: Pick<Session, 'id' | 'name' | 'repoDir'>, after = '/') {
+export async function deleteSession(s: Pick<Session, 'id' | 'name' | 'repoDir' | 'agent'>, after = '/') {
 	const ok = await confirmAction({
 		title: `Delete ${s.name}?`,
 		body: 'This stops the session and deletes its clone of the repo, its home folder and its conversations. Commits you pushed stay on GitHub.',
-		detail: `/workspace/${s.repoDir}`,
+		detail: sessionWorkdir(s),
 		confirmLabel: 'Delete session',
 		danger: true
 	});

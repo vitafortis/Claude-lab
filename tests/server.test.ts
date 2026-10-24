@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demux, parseImageRef, supportsSubpath } from '#lib/server/docker.ts';
-import { parseAuthStatus } from '#lib/server/claude-accounts.ts';
+import { parseAuthStatus } from '#lib/server/accounts.ts';
 import { parseEnvLines } from '#lib/server/sessions/runtime.ts';
 import { sessionTokenFromHeader } from '#lib/server/auth.ts';
 
@@ -37,7 +37,7 @@ test('parseAuthStatus', () => {
 		email: 'a@b.co',
 		plan: 'max'
 	});
-	assert.deepEqual(parseAuthStatus('{"loggedIn": true, "authMethod": "api_key"}', 0), { status: 'signed_in', email: null, plan: 'api_key' });
+	assert.deepEqual(parseAuthStatus('{"loggedIn": true, "authMethod": "api_key"}', 0), { status: 'signed_in', email: null, plan: null });
 	assert.equal(parseAuthStatus('garbage', 1).status, 'signed_out');
 });
 

@@ -19,6 +19,8 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 	};
 	const sessionImage = typeof b.sessionImage === 'string' && b.sessionImage.trim() ? b.sessionImage.trim() : cur.sessionImage;
 	if (!IMAGE.test(sessionImage)) throw new BadRequest('That doesn’t look like an image reference');
+	const agentsImage = typeof b.agentsImage === 'string' && b.agentsImage.trim() ? b.agentsImage.trim() : cur.agentsImage;
+	if (!IMAGE.test(agentsImage)) throw new BadRequest('That doesn’t look like an image reference');
 	const network = typeof b.network === 'string' ? b.network.trim() : '';
 	if (network && !NETWORK.test(network)) throw new BadRequest('That doesn’t look like a Docker network name');
 	const extraEnv = typeof b.extraEnv === 'string' ? b.extraEnv.slice(0, 20_000) : '';
@@ -34,6 +36,7 @@ export const PUT: RequestHandler = handler(async ({ request }) => {
 	}
 	saveSettings({
 		sessionImage,
+		agentsImage,
 		network,
 		memoryMb: num('memoryMb', 1024 * 1024),
 		cpus: num('cpus', 512),

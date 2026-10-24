@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Runs in the session's tmux pane: clones the repo on first launch, then starts Claude
-# Code as /session/.ccm/launch.json says (new, continue or resume a conversation).
-# When Claude exits the pane drops to a shell, so nothing on screen is lost.
+# Runs in the session's tmux pane: clones the repo on first launch, then starts the agent
+# ($CCM_AGENT: claude, codex or gemini) as /session/.ccm/launch.json says (new, continue or
+# resume a conversation). When the agent exits the pane drops to a shell, so nothing on
+# screen is lost.
 set -u
 
 repo="${CCM_REPO_DIR:?}"
+agent="${CCM_AGENT:-claude}"
 bold=$'\e[1m'; dim=$'\e[2m'; red=$'\e[31m'; reset=$'\e[0m'
+
+case "$agent" in
+	codex) again="codex resume --last" ;;
+	gemini) again="gemini --resume latest" ;;
+	*) agent=claude; again="claude --continue" ;;
+esac
 
 fallback() {
 	echo
-	echo "${dim}── Claude exited${1:+ ($1)}. Run ${reset}${bold}claude --continue${reset}${dim} to pick up again, or use Restart in cc·modern.${reset}"
+	echo "${dim}── ${agent} exited${1:+ ($1)}. Run ${reset}${bold}${again}${reset}${dim} to pick up again, or use Restart in cc·modern.${reset}"
 	exec bash -l
 }
 
@@ -35,9 +43,14 @@ fi
 cd "$repo" || fallback "no repo"
 node /usr/local/lib/ccm/seed.mjs "$repo" || true
 
-mapfile -d '' claude_args < <(node /usr/local/lib/ccm/args.mjs)
-# Job control gives Claude the terminal's foreground process group: tmux then reports it
-# as the pane's command, and Ctrl+C reaches Claude without ending this script.
+# Codex's terminal UI only uses a stored key, not OPENAI_API_KEY.
+if [ "$agent" = codex ] && [ -n "${OPENAI_API_KEY:-}" ]; then
+	printenv OPENAI_API_KEY | codex login --with-api-key >/dev/null 2>&1 || echo "${red}Couldn't store the OpenAI API key for Codex.${reset}"
+fi
+
+mapfile -d '' agent_args < <(node /usr/local/lib/ccm/args.mjs)
+# Job control gives the agent the terminal's foreground process group: tmux then reports it
+# as the pane's command, and Ctrl+C reaches the agent without ending this script.
 set -m
-claude "${claude_args[@]}"
+"$agent" "${agent_args[@]}"
 fallback "status $?"

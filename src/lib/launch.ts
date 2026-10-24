@@ -1,4 +1,4 @@
-import type { PermissionMode } from './types.ts';
+import type { Agent, PermissionMode } from './types.ts';
 
 /**
  * Normalizes what someone typed as a repository: `owner/name`, a GitHub https or ssh URL,
@@ -89,4 +89,55 @@ export function claudeArgs(opts: LaunchOptions, launch: LaunchMode): string[] {
 		args.push(p.startsWith('-') ? ` ${p}` : p);
 	}
 	return args;
+}
+
+/**
+ * Codex CLI's arguments. Its own sandbox (bubblewrap) can't create namespaces inside an
+ * unprivileged container, so Codex runs with full access to the container, which is the
+ * sandbox, and asks before commands unless permissions are bypassed.
+ */
+export function codexArgs(opts: LaunchOptions, launch: LaunchMode): string[] {
+	const flags = ['--no-daemon'];
+	if (opts.permissionMode === 'bypassPermissions') flags.push('--dangerously-bypass-approvals-and-sandbox');
+	else flags.push('-s', 'danger-full-access', '-a', 'on-request');
+	if (opts.model) flags.push('-m', opts.model);
+	if (launch.mode === 'continue') return ['resume', '--last', ...flags];
+	if (launch.mode === 'resume') {
+		if (!UUID.test(launch.conversationId)) throw new Error('Invalid conversation id');
+		return ['resume', launch.conversationId, ...flags];
+	}
+	const p = launch.prompt?.trim();
+	return p ? [...flags, p.startsWith('-') ? ` ${p}` : p] : flags;
+}
+
+const GEMINI_APPROVAL: Record<PermissionMode, string> = {
+	default: 'default',
+	acceptEdits: 'auto_edit',
+	plan: 'plan',
+	auto: 'auto_edit',
+	bypassPermissions: 'yolo'
+};
+
+/** Gemini CLI's arguments. The session's folder is trusted for the session (--skip-trust). */
+export function geminiArgs(opts: LaunchOptions, launch: LaunchMode): string[] {
+	const args = ['--skip-trust', '--approval-mode', GEMINI_APPROVAL[opts.permissionMode]];
+	if (opts.model) args.push('-m', opts.model);
+	if (launch.mode === 'continue') args.push('--resume', 'latest');
+	if (launch.mode === 'resume') args.push('--resume', launch.conversationId);
+	if (launch.mode === 'new' && launch.prompt?.trim()) args.push('--prompt-interactive', launch.prompt.trim());
+	return args;
+}
+
+export function agentArgs(agent: Agent, opts: LaunchOptions, launch: LaunchMode): string[] {
+	if (agent === 'codex') return codexArgs(opts, launch);
+	if (agent === 'gemini') return geminiArgs(opts, launch);
+	return claudeArgs(opts, launch);
+}
+
+/**
+ * Where a session's repository is inside its container. Codex and Gemini file conversations
+ * by working directory, so theirs is unique per session; Claude's go by session id already.
+ */
+export function sessionWorkdir(s: { id: string; repoDir: string; agent: Agent }): string {
+	return s.agent === 'claude' ? `/workspace/${s.repoDir}` : `/workspace/${s.id.slice(0, 8)}/${s.repoDir}`;
 }

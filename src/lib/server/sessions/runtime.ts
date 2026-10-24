@@ -3,7 +3,7 @@
  * a container. Stopping removes the container and keeps the data, so starting again always
  * gets the current image, accounts and settings, and Claude picks up the conversation.
  */
-import { rmSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.ts';
 import {
@@ -22,8 +22,6 @@ import {
 import { Conflict, NotFound } from '../http.ts';
 import {
 	deleteSession as deleteSessionRow,
-	getClaudeAccount,
-	getClaudeSecret,
 	getGitIdentity,
 	getGithubAccount,
 	getGithubToken,
@@ -33,7 +31,8 @@ import {
 	listSessions,
 	setSessionState
 } from '../store.ts';
-import { claudeArgs, slugify, type LaunchMode } from '#lib/launch.ts';
+import { agentArgs, sessionWorkdir, slugify, type LaunchMode } from '#lib/launch.ts';
+import { agentSetup, supportsRemoteControl, type AgentSetup } from '../providers.ts';
 import { accountRel, backing, conversationsDir, ensureDirs, metaDir, mountSpec, sessionRel } from './storage.ts';
 import { hasConversations } from './transcripts.ts';
 import type { Session, Settings } from '#lib/types.ts';
@@ -45,7 +44,7 @@ export const LABELS = {
 	account: 'cc-modern.account'
 } as const;
 
-export const workdir = (s: Pick<Session, 'repoDir'>) => `/workspace/${s.repoDir}`;
+export const workdir = sessionWorkdir;
 
 /**
  * Removes a container by name only if it's one of ours: names like claude-<repo> could
@@ -66,13 +65,17 @@ export async function allocateContainerName(repoDir: string): Promise<string> {
 	}
 }
 
-let pulling: Promise<void> | null = null;
+const pulling = new Map<string, Promise<void>>();
 
-/** Pulls the session image the first time it's needed (one pull at a time). */
+/** Pulls an image the first time it's needed (one pull per image at a time). */
 export async function ensureImage(image: string) {
 	if (await imageExists(image)) return;
-	pulling ??= pullImage(image).finally(() => (pulling = null));
-	await pulling;
+	let p = pulling.get(image);
+	if (!p) {
+		p = pullImage(image).finally(() => pulling.delete(image));
+		pulling.set(image, p);
+	}
+	await p;
 }
 
 /** KEY=value lines from Settings → Extra environment. */
@@ -81,16 +84,6 @@ export function parseEnvLines(text: string): string[] {
 		.split('\n')
 		.map((l) => l.trim())
 		.filter((l) => l && !l.startsWith('#') && /^[A-Za-z_][A-Za-z0-9_]*=/.test(l));
-}
-
-/** How a container authenticates as a Claude account. */
-export function claudeEnv(accountId: string): string[] {
-	const account = getClaudeAccount(accountId);
-	if (!account) throw new NotFound('That Claude account no longer exists. Pick another one in the session settings.');
-	const secret = account.kind === 'subscription' ? undefined : getClaudeSecret(accountId);
-	if (account.kind === 'token' && secret) return [`CLAUDE_CODE_OAUTH_TOKEN=${secret}`];
-	if (account.kind === 'api_key' && secret) return [`ANTHROPIC_API_KEY=${secret}`];
-	return [];
 }
 
 // Without a GitHub account git has no identity, and every commit would fail.
@@ -109,26 +102,25 @@ function githubEnv(accountId: string | null): string[] {
 	];
 }
 
-/** Remote Control needs a full claude.ai login; tokens and API keys can't use it. */
-export function remoteControlAvailable(s: Pick<Session, 'claudeAccountId'>): boolean {
-	return getClaudeAccount(s.claudeAccountId)?.kind === 'subscription';
+function writeLaunch(s: Session, agent: AgentSetup, launch: LaunchMode) {
+	const opts = { name: s.name, model: s.model, permissionMode: s.permissionMode, remoteControl: s.remoteControl && supportsRemoteControl(agent.account) };
+	const args = agentArgs(agent.agent, opts, launch);
+	writeFileSync(join(metaDir(s.id), 'launch.json'), JSON.stringify({ agent: agent.agent, args, launch: launch.mode, at: new Date().toISOString() }, null, 2));
 }
 
-function writeLaunch(s: Session, launch: LaunchMode) {
-	const args = claudeArgs(
-		{ name: s.name, model: s.model, permissionMode: s.permissionMode, remoteControl: s.remoteControl && remoteControlAvailable(s) },
-		launch
-	);
-	writeFileSync(join(metaDir(s.id), 'launch.json'), JSON.stringify({ args, launch: launch.mode, at: new Date().toISOString() }, null, 2));
+/**
+ * Without an explicit choice, pick up the newest conversation if there is one. Codex and
+ * Gemini keep theirs by working directory (unique per session) and start fresh when there
+ * is nothing to resume, so any earlier launch is enough.
+ */
+function defaultLaunch(s: Session): LaunchMode {
+	const before = s.agent === 'claude' ? hasConversations(s) : existsSync(join(metaDir(s.id), 'launch.json'));
+	return before ? { mode: 'continue' } : { mode: 'new' };
 }
 
-/** Without an explicit choice, pick up the newest conversation if there is one. */
-const defaultLaunch = (s: Session): LaunchMode => (hasConversations(s) ? { mode: 'continue' } : { mode: 'new' });
-
-function containerSpec(s: Session, settings: Settings, mounts: Record<string, unknown>[]) {
+function containerSpec(s: Session, settings: Settings, agent: AgentSetup, mounts: Record<string, unknown>[]) {
 	const env = [
 		`HOME=/session/home`,
-		`CLAUDE_CONFIG_DIR=/claude`,
 		// Transcripts land in accounts/<account>/projects/<session id>, whatever the folder.
 		`CLAUDE_CODE_PROJECT_DIR_NAME=${s.id}`,
 		`CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX=cc-modern`,
@@ -140,11 +132,11 @@ function containerSpec(s: Session, settings: Settings, mounts: Record<string, un
 		...(s.checkoutPr ? [`CCM_PR_NUMBER=${s.checkoutPr}`] : []),
 		...(s.permissionMode === 'bypassPermissions' ? ['CCM_BYPASS_PERMISSIONS=1'] : []),
 		...parseEnvLines(settings.extraEnv),
-		...claudeEnv(s.claudeAccountId),
+		...agent.env,
 		...githubEnv(s.githubAccountId)
 	];
 	return {
-		Image: settings.sessionImage,
+		Image: agent.image,
 		Hostname: s.containerName,
 		Env: env,
 		WorkingDir: workdir(s),
@@ -152,7 +144,7 @@ function containerSpec(s: Session, settings: Settings, mounts: Record<string, un
 			[LABELS.instance]: config.instance,
 			[LABELS.kind]: 'session',
 			[LABELS.session]: s.id,
-			[LABELS.account]: s.claudeAccountId
+			[LABELS.account]: s.accountId
 		},
 		HostConfig: {
 			Mounts: mounts,
@@ -178,19 +170,19 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 	setSessionState(id, { status: 'starting', error: null });
 	try {
 		const settings = getSettings();
-		claudeEnv(s.claudeAccountId); // fails early if the account is gone
 		const b = await backing();
-		ensureDirs(accountRel(s.claudeAccountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.ccm`);
-		await ensureImage(settings.sessionImage);
-		writeLaunch(s, launch ?? defaultLaunch(s));
+		ensureDirs(accountRel(s.accountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.ccm`);
+		const agent = agentSetup(s.accountId); // fails early if the account is gone
+		await ensureImage(agent.image);
+		writeLaunch(s, agent, launch ?? defaultLaunch(s));
 		const name = s.containerName;
 		await removeOwned(name);
 		const mounts = [
-			mountSpec(b, accountRel(s.claudeAccountId), '/claude'),
+			mountSpec(b, accountRel(s.accountId), agent.mount),
 			mountSpec(b, sessionRel(id), '/session'),
 			mountSpec(b, `${sessionRel(id)}/repo`, workdir(s))
 		];
-		const containerId = await createContainer(name, containerSpec(s, settings, mounts));
+		const containerId = await createContainer(name, containerSpec(s, settings, agent, mounts));
 		await startContainer(containerId);
 		setSessionState(id, { status: 'running', containerId, error: null, started: true });
 	} catch (err) {
@@ -223,12 +215,18 @@ export async function runningContainer(id: string): Promise<{ session: Session; 
 	return { session: s, container: info.Id };
 }
 
-/** Restarts Claude inside a running session (to resume another conversation, or after it exited). */
-export async function relaunchClaude(id: string, launch?: LaunchMode): Promise<Session> {
+/** Restarts the agent inside a running session (to resume another conversation, or after it exited). */
+export async function relaunchAgent(id: string, launch?: LaunchMode): Promise<Session> {
 	const { session, container } = await runningContainer(id);
-	writeLaunch(session, launch ?? defaultLaunch(session));
+	const agent = agentSetup(session.accountId);
+	const info = await inspectContainer(container);
+	// The container's environment and image belong to the account it started with.
+	if (info?.Config.Labels?.[LABELS.account] !== session.accountId) {
+		throw new Conflict('The session changed accounts since it started. Stop and start it to switch.');
+	}
+	writeLaunch(session, agent, launch ?? defaultLaunch(session));
 	const r = await exec(container, ['tmux', 'respawn-pane', '-k', '-t', 'main', 'ccm-launch'], { user: 'node' });
-	if (r.exitCode !== 0) throw new DockerError(r.stderr.trim() || 'Could not restart Claude');
+	if (r.exitCode !== 0) throw new DockerError(r.stderr.trim() || 'Could not restart the agent');
 	return session;
 }
 
@@ -249,7 +247,7 @@ export async function deleteSession(id: string) {
 	if (s.containerId) await removeContainer(s.containerId);
 	await removeOwned(s.containerName);
 	rmSync(join(config.sessionsDir, sessionRel(id)), { recursive: true, force: true });
-	rmSync(conversationsDir(s.claudeAccountId, id), { recursive: true, force: true });
+	rmSync(conversationsDir(s.accountId, id), { recursive: true, force: true });
 	deleteSessionRow(id);
 }
 

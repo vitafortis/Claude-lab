@@ -5,6 +5,7 @@
 	import StateDot from './StateDot.svelte';
 	import { ago } from '#lib/client/format.ts';
 	import { sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
+	import { AGENT_LABEL } from '#lib/providers.ts';
 	import { displayState } from '#lib/session-state.ts';
 	import type { Session, SessionLive } from '#lib/types.ts';
 
@@ -67,7 +68,7 @@
 			<p class="line-clamp-3 text-muted-foreground"><span class="font-medium text-primary">Claude:</span> {sum.lastReply}</p>
 		{/if}
 		{#if !sum && s.status !== 'error'}
-			<p class="text-muted-foreground">{view === 'starting' ? 'Starting the container and cloning the repo…' : 'No conversation yet.'}</p>
+			<p class="text-muted-foreground">{view === 'starting' ? 'Starting the container and cloning the repo…' : s.agent === 'claude' ? 'No conversation yet.' : `${AGENT_LABEL[s.agent]}: see the terminal for the conversation.`}</p>
 		{/if}
 		{#if sum?.todos.length}
 			<div class="flex items-center gap-2 text-xs text-muted-foreground">
