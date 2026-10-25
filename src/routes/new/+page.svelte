@@ -4,6 +4,7 @@
 	import { untrack } from 'svelte';
 	import { CircleAlert, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, Wand } from '@lucide/svelte';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
 	import Switch from '#lib/components/Switch.svelte';
@@ -220,7 +221,7 @@
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Repository</h2>
 			<div class="grid gap-4 sm:grid-cols-[14rem_1fr]">
 				<div>
-					<label class="label" for="gh">GitHub account</label>
+					<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 					<select id="gh" class="input" bind:value={githubAccountId}>
 						{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
 						<option value="">None (public repo)</option>

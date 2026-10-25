@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import { Check, GitBranch, KeyRound, Play, Plus, TerminalSquare, Trash2, Wand } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import SessionCard from '#lib/components/SessionCard.svelte';
@@ -27,9 +28,9 @@
 	});
 
 	const steps = $derived([
-		{ done: data.accounts > 0, label: 'Connect a Claude account', hint: 'Sign in with your Pro or Max plan, or add an API key', href: '/accounts', icon: KeyRound },
-		{ done: data.githubAccounts > 0, label: 'Connect GitHub', hint: 'For private repos and pushing. Public repos work without', href: '/accounts#github', icon: GitBranch },
-		{ done: sessions.list.length > 0, label: 'Start a session', hint: 'Pick a repo; Claude starts in its own container', href: '/new', icon: TerminalSquare }
+		{ done: data.accounts > 0, label: 'Connect a model account', hint: 'A Claude plan or API key, Claude on your cloud, OpenAI or Google', href: '/accounts', icon: KeyRound, brand: 'claude' as const },
+		{ done: data.githubAccounts > 0, label: 'Connect GitHub', hint: 'For private repos and pushing. Public repos work without', href: '/accounts#github', icon: GitBranch, brand: 'github' as const },
+		{ done: sessions.list.length > 0, label: 'Start a session', hint: 'Pick a repo; the agent starts in its own container', href: '/new', icon: TerminalSquare, brand: null }
 	]);
 </script>
 
@@ -59,7 +60,7 @@
 									<span class="block text-[0.8125rem] font-medium {step.done ? 'text-muted-foreground line-through' : ''}">{step.label}</span>
 									<span class="block text-xs text-muted-foreground">{step.hint}</span>
 								</span>
-								<step.icon class="size-4 text-muted-foreground" />
+								{#if step.brand}<BrandIcon brand={step.brand} />{:else}<step.icon class="size-4 text-muted-foreground" />{/if}
 							</a>
 						</li>
 					{/each}

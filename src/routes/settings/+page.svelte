@@ -3,6 +3,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { Box, CircleCheck, CircleX, Container, Download, HardDrive, LoaderCircle, Save } from '@lucide/svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import SettingsTabs from '#lib/components/SettingsTabs.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
@@ -177,7 +178,7 @@
 					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments and the SSO callback. Empty: the address you last opened cc·modern at.</p>
 				</div>
 				<div class="sm:col-span-2">
-					<label class="label" for="ghc">GitHub OAuth app <span class="font-normal text-muted-foreground">· optional</span></label>
+					<label class="label flex items-center gap-1.5" for="ghc"><BrandIcon brand="github" class="size-3.5" />GitHub OAuth app <span class="font-normal text-muted-foreground">· optional</span></label>
 					<input id="ghc" class="input font-mono text-xs" placeholder="Client ID, e.g. Ov23li…" bind:value={form.githubClientId} />
 					<p class="mt-1.5 text-xs text-muted-foreground">
 						Adds <b class="font-medium text-foreground">Sign in with GitHub</b> under Accounts. Create an OAuth app (GitHub → Settings → Developer settings) with <i>Enable Device Flow</i> checked; no secret or callback URL needed. Without it, add personal access tokens.

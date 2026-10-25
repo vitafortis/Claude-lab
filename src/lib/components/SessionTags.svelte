@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, SquareKanban, Wand } from '@lucide/svelte';
+	import { GitMerge, GitPullRequest, GitPullRequestClosed, GitPullRequestDraft, Wand } from '@lucide/svelte';
 	import AgentBadge from './AgentBadge.svelte';
+	import BrandIcon from './BrandIcon.svelte';
 	import type { Session } from '#lib/types.ts';
 
 	let { session: s }: { session: Session } = $props();
@@ -18,7 +19,7 @@
 	<span class="flex flex-wrap items-center gap-1.5">
 		{#if s.agent !== 'claude'}<AgentBadge agent={s.agent} short />{/if}
 		{#if s.linear}
-			<a class="badge hover:text-foreground" href={s.linear.url} target="_blank" rel="noopener" title="Started from this Linear issue"><SquareKanban />{s.linear.identifier}</a>
+			<a class="badge hover:text-foreground" href={s.linear.url} target="_blank" rel="noopener" title="Started from this Linear issue"><BrandIcon brand="linear" class="size-3" />{s.linear.identifier}</a>
 		{/if}
 		{#if s.skill}
 			<span class="badge font-mono" title="Started with this skill"><Wand />{s.skill}</span>

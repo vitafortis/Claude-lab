@@ -6,7 +6,6 @@
 		CircleAlert,
 		Copy,
 		CornerDownLeft,
-		ExternalLink,
 		FilePlus2,
 		GitBranch,
 		History,
@@ -34,6 +33,7 @@
 	import StateDot from '#lib/components/StateDot.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import LinkBar from '#lib/components/LinkBar.svelte';
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
@@ -202,7 +202,7 @@
 			</div>
 		{/if}
 		{#if s.rcUrl && running}
-			<a class="btn btn-secondary btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open this session in claude.ai (Remote Control)"><ExternalLink />Remote</a>
+			<a class="btn btn-secondary btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open this session in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
 		{/if}
 		<Menu items={restartItems}>
 			{#snippet trigger({ toggle })}
@@ -351,7 +351,7 @@
 						</select>
 					</div>
 					<div>
-						<label class="label" for="gh">GitHub account</label>
+						<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 						<select id="gh" class="input h-8 text-xs" value={s.githubAccountId ?? ''} onchange={(e) => patch({ githubAccountId: e.currentTarget.value || null })}>
 							{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
 							<option value="">None</option>

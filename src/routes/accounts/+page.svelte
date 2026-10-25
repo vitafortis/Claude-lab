@@ -7,14 +7,15 @@
 		CircleCheck,
 		CircleHelp,
 		ChevronDown,
+		Cloud,
 		ChevronLeft,
 		ChevronRight,
 		ChevronUp,
 		CircleX,
 		ExternalLink,
 		Layers,
+		Network,
 		Pencil,
-		KeyRound,
 		LoaderCircle,
 		LogIn,
 		Plus,
@@ -32,7 +33,9 @@
 	import { ago } from '#lib/client/format.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import { matchProfile } from '#lib/profiles.ts';
+	import { GROUP_BRAND, KIND_BRAND } from '#lib/brands.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES, fitPermissionMode, type KindSpec } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type AccountKind, type Agent, type GithubAccount, type ModelAccount, type PermissionMode, type Profile } from '#lib/types.ts';
 	import type { PageProps } from './$types';
@@ -442,7 +445,9 @@
 			<div class="card divide-y divide-border">
 				{#each data.accounts as a (a.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
-						<span class="grid size-9 max-sm:hidden shrink-0 place-items-center rounded-full bg-primary-soft text-primary"><KeyRound class="size-4" /></span>
+						<span class="grid size-9 shrink-0 place-items-center rounded-full border border-border bg-surface text-foreground max-sm:hidden">
+							{#if KIND_BRAND[a.kind]}<BrandIcon brand={KIND_BRAND[a.kind]!} class="size-[1.125rem]" />{:else}<Network class="size-4 text-muted-foreground" />{/if}
+						</span>
 						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">{a.name} <AgentBadge agent={a.agent} /> {@render statusBadge(a)}</p>
 							<p class="truncate text-xs text-muted-foreground">{details(a)}</p>
@@ -519,11 +524,11 @@
 		<section id="github">
 			<div class="mb-3 flex flex-wrap items-end justify-between gap-3">
 				<div>
-					<h2 class="text-[0.9375rem] font-semibold tracking-tight">GitHub</h2>
+					<h2 class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><BrandIcon brand="github" />GitHub</h2>
 					<p class="text-xs text-muted-foreground">For listing and cloning private repos, pushing branches and opening pull requests with <code class="font-mono">gh</code>.</p>
 				</div>
 				<div class="flex gap-2">
-					{#if data.deviceFlow}<button class="btn btn-primary btn-sm" onclick={startDevice}><LogIn />Sign in with GitHub</button>{/if}
+					{#if data.deviceFlow}<button class="btn btn-primary btn-sm" onclick={startDevice}><BrandIcon brand="github" class="size-4" />Sign in with GitHub</button>{/if}
 					<button class="btn btn-secondary btn-sm" onclick={() => ((addingToken = true), (tokenError = ''))}><Plus />Add a token</button>
 				</div>
 			</div>
@@ -564,10 +569,15 @@
 		<div class="space-y-4">
 			{#each GROUPS as g (g)}
 				<div>
-					<p class="mb-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>
+					<p class="mb-1.5 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">
+						{#if GROUP_BRAND[g]}<BrandIcon brand={GROUP_BRAND[g]!} class="size-3" />{:else}<Cloud class="size-3" />{/if}{g}
+					</p>
 					<div class="divide-y divide-border overflow-hidden rounded-xl border border-border">
 						{#each kindsIn(g) as [value, k] (value)}
 							<button type="button" class="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/40 active:bg-accent/60" onclick={() => pickKind(value)}>
+								<span class="grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-surface text-foreground">
+									{#if KIND_BRAND[value]}<BrandIcon brand={KIND_BRAND[value]!} />{:else}<Network class="size-4 text-muted-foreground" />{/if}
+								</span>
 								<span class="min-w-0 flex-1">
 									<span class="flex items-center gap-2 text-[0.8125rem] font-medium">{k.label}{#if k.remoteControl}<span class="badge">Remote Control</span>{/if}</span>
 									<span class="line-clamp-2 text-xs text-muted-foreground">{k.description}</span>
@@ -583,7 +593,9 @@
 		<form id="add-account" class="space-y-4" onsubmit={saveAccount}>
 			<div class="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
 				<span class="min-w-0 flex-1">
-					<span class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium"><AgentBadge agent={spec.agent} />{spec.label}</span>
+					<span class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
+					{#if KIND_BRAND[kind]}<BrandIcon brand={KIND_BRAND[kind]!} />{/if}{spec.label}<AgentBadge agent={spec.agent} />
+				</span>
 					<span class="mt-0.5 block text-xs text-muted-foreground">{spec.description}</span>
 				</span>
 				{#if !editing}<button type="button" class="btn btn-ghost btn-sm -mr-1 shrink-0" onclick={() => (step = 'pick')}><ChevronLeft />Change</button>{/if}

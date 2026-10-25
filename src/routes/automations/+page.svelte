@@ -9,12 +9,12 @@
 		Pencil,
 		Plus,
 		RefreshCw,
-		SquareKanban,
 		Tag,
 		Trash2,
 		Unplug
 	} from '@lucide/svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
+	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
 	import Switch from '#lib/components/Switch.svelte';
@@ -178,7 +178,7 @@
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
 		<section class="card p-5">
 			<div class="flex flex-wrap items-start gap-4">
-				<span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><SquareKanban class="size-5" /></span>
+				<span class="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-surface"><BrandIcon brand="linear" class="size-5" /></span>
 				<div class="min-w-0 flex-1 basis-52">
 					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Linear</h2>
 					{#if data.linear.connected}
@@ -255,7 +255,7 @@
 				<div class="card divide-y divide-border">
 					{#each data.runs as run (run.ruleId + run.issueId)}
 						<div class="flex flex-wrap items-center gap-3 px-4 py-2.5 text-[0.8125rem]">
-							<a class="badge hover:text-foreground" href={run.url} target="_blank" rel="noopener"><SquareKanban />{run.identifier}</a>
+							<a class="badge hover:text-foreground" href={run.url} target="_blank" rel="noopener"><BrandIcon brand="linear" class="size-3" />{run.identifier}</a>
 							<span class="min-w-0 flex-1 truncate">{run.title}</span>
 							<span class="text-xs text-muted-foreground">{ruleName(run.ruleId)}</span>
 							{#if run.status === 'error'}
@@ -291,7 +291,7 @@
 		</div>
 		<div class="grid gap-4 sm:grid-cols-[12rem_1fr]">
 			<div>
-				<label class="label" for="rgh">GitHub account</label>
+				<label class="label flex items-center gap-1.5" for="rgh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 				<select id="rgh" class="input" bind:value={form.githubAccountId}>
 					{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
 					<option value={null}>None (public repo)</option>

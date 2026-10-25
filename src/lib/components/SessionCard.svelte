@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ArrowRight, CircleAlert, ExternalLink, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Wrench } from '@lucide/svelte';
+	import { ArrowRight, CircleAlert, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Wrench } from '@lucide/svelte';
 	import StateBadge from './StateBadge.svelte';
+	import BrandIcon from './BrandIcon.svelte';
 	import SessionTags from './SessionTags.svelte';
 	import StateDot from './StateDot.svelte';
 	import { ago } from '#lib/client/format.ts';
@@ -107,7 +108,7 @@
 		<span title={sum?.updatedAt ?? s.lastStartedAt ?? s.createdAt}>{ago(sum?.updatedAt ?? s.lastStartedAt ?? s.createdAt)}</span>
 		<span class="ml-auto flex items-center gap-1.5">
 			{#if s.rcUrl && running}
-				<a class="btn btn-ghost btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open in claude.ai (Remote Control)"><ExternalLink />Remote</a>
+				<a class="btn btn-ghost btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
 			{/if}
 			{#if running}
 				<button class="btn btn-ghost btn-sm btn-icon" title="Stop" disabled={busy} onclick={() => act(() => stopSession(s))}><Square /></button>

@@ -263,4 +263,4 @@ Built with SvelteKit, Tailwind CSS and xterm.js, in the same style as [pg·moder
 
 [Apache 2.0](LICENSE): use, modify and redistribute it, commercially or not, keeping the license and [NOTICE](NOTICE). Contributions are accepted under the same license.
 
-cc·modern is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners.
+cc·modern is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners. Brand logos come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) and only identify each service.
