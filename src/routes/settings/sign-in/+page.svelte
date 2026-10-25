@@ -313,17 +313,19 @@
 				{#each data.users as u (u.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
 						<span class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary uppercase">{(u.name ?? u.email).slice(0, 1)}</span>
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
 								{u.name ?? u.email}{#if u.id === data.me}<span class="badge">You</span>{/if}<span class="badge">{SOURCE[u.source]}</span>
 							</p>
 							<p class="truncate text-xs text-muted-foreground">{[u.name ? u.email : null, u.lastLoginAt ? `signed in ${ago(u.lastLoginAt)}` : 'never signed in'].filter(Boolean).join(' · ')}</p>
 						</div>
-						<select class="input h-8 w-auto text-xs" value={u.role} onchange={(e) => setRole(u, e.currentTarget.value as UserRole)} aria-label="Role">
-							<option value="admin">Admin</option>
-							<option value="member">Member</option>
-						</select>
-						<button type="button" class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Remove" disabled={u.id === data.me} onclick={() => removeUser(u)}><Trash2 /></button>
+						<div class="ml-auto flex items-center gap-1">
+							<select class="input h-8 w-auto text-xs" value={u.role} onchange={(e) => setRole(u, e.currentTarget.value as UserRole)} aria-label="Role">
+								<option value="admin">Admin</option>
+								<option value="member">Member</option>
+							</select>
+							<button type="button" class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Remove" disabled={u.id === data.me} onclick={() => removeUser(u)}><Trash2 /></button>
+						</div>
 					</div>
 				{/each}
 			</div>

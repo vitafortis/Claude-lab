@@ -179,7 +179,7 @@
 		<section class="card p-5">
 			<div class="flex flex-wrap items-start gap-4">
 				<span class="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary"><SquareKanban class="size-5" /></span>
-				<div class="min-w-0 flex-1">
+				<div class="min-w-0 flex-1 basis-52">
 					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Linear</h2>
 					{#if data.linear.connected}
 						<p class="text-xs text-muted-foreground">Connected to <b class="font-medium text-foreground">{data.linear.organization}</b> as {data.linear.viewer}. Rules are checked every minute.</p>
@@ -191,7 +191,7 @@
 					{/if}
 				</div>
 				{#if data.linear.connected}
-					<div class="flex gap-2">
+					<div class="ml-auto flex gap-2">
 						<button class="btn btn-secondary btn-sm" disabled={checking} onclick={checkNow}>{#if checking}<LoaderCircle class="animate-spin" />{:else}<RefreshCw />{/if}Check now</button>
 						<button class="btn btn-ghost btn-sm" onclick={disconnect}><Unplug />Disconnect</button>
 					</div>
@@ -217,7 +217,7 @@
 			<div class="space-y-3">
 				{#each data.rules as rule (rule.id)}
 					<div class="card flex flex-wrap items-center gap-4 p-4 {rule.enabled ? '' : 'opacity-70'}">
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 basis-52">
 							<p class="text-[0.8125rem] font-medium">{rule.name}</p>
 							<p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
 								Issues in <span class="badge">{rule.teamKey}</span> labelled <span class="badge badge-primary"><Tag />{rule.label}</span>
@@ -231,9 +231,11 @@
 							</p>
 							{#if rule.lastError}<p class="mt-1 flex items-center gap-1.5 text-xs text-danger"><CircleAlert class="size-3.5" />{rule.lastError}</p>{/if}
 						</div>
-						<Switch checked={rule.enabled} label="Enabled" onchange={(v) => toggle(rule, v)} />
-						<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openRule(rule)}><Pencil /></button>
-						<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeRule(rule)}><Trash2 /></button>
+						<div class="ml-auto flex items-center gap-1">
+							<Switch checked={rule.enabled} label="Enabled" onchange={(v) => toggle(rule, v)} />
+							<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openRule(rule)}><Pencil /></button>
+							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeRule(rule)}><Trash2 /></button>
+						</div>
 					</div>
 				{:else}
 					<div class="card px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">

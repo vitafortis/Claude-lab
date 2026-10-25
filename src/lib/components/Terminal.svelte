@@ -54,6 +54,11 @@
 		focusTerm();
 	}
 
+	/** Whether keystrokes reach the container right now. */
+	export function isOpen() {
+		return ws?.readyState === WebSocket.OPEN;
+	}
+
 	function setConn(s: typeof conn) {
 		conn = s;
 		onstate?.(s);
@@ -150,7 +155,22 @@
 			};
 			connect();
 
+			// Phones drop the connection while the tab is in the background (e.g. on a sign-in
+			// page): reconnect the moment it's back, instead of waiting out the backoff.
+			const wake = () => {
+				if (document.visibilityState !== 'visible' || ws || disposed) return;
+				clearTimeout(timer);
+				retry = 0;
+				connect();
+			};
+			document.addEventListener('visibilitychange', wake);
+			window.addEventListener('online', wake);
+			window.addEventListener('pageshow', wake);
+
 			cleanup = () => {
+				document.removeEventListener('visibilitychange', wake);
+				window.removeEventListener('online', wake);
+				window.removeEventListener('pageshow', wake);
 				ro.disconnect();
 				ws?.close();
 				term.dispose();

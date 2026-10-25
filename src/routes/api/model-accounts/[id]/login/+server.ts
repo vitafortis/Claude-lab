@@ -11,12 +11,13 @@ export const GET: RequestHandler = handler(async ({ params }) => {
 	return json(await loginScreen(params.id));
 });
 
-/** Starts the sign-in container; the browser then opens its terminal. */
-export const POST: RequestHandler = handler(async ({ params }) => {
+/** Starts the sign-in container, or picks up the one already running; {restart: true} starts over. */
+export const POST: RequestHandler = handler(async ({ params, request }) => {
 	const a = getAccount(params.id);
 	if (!a) throw new NotFound('Account not found');
 	if (!ACCOUNT_KINDS[a.kind].signIn) throw new BadRequest('This account uses a key, not a sign-in');
-	await startLogin(a.id);
+	const b = await request.json().catch(() => ({}));
+	await startLogin(a.id, b?.restart === true);
 	return json({ ok: true });
 });
 

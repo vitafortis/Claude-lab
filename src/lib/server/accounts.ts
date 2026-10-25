@@ -38,9 +38,17 @@ async function baseSpec(accountId: string, extra: { env?: string[]; cmd?: string
 	};
 }
 
-/** Starts (or restarts) the sign-in container; its terminal is at /ws/accounts/<id>/login. */
-export async function startLogin(accountId: string): Promise<string> {
+/**
+ * Starts the sign-in container; its terminal is at /ws/accounts/<id>/login. One that's
+ * already running is kept (its link and code are still the ones the person has open on
+ * another tab) unless `restart` asks for a fresh one.
+ */
+export async function startLogin(accountId: string, restart = false): Promise<string> {
 	const name = loginName(accountId);
+	if (!restart) {
+		const running = await loginContainer(accountId);
+		if (running) return running;
+	}
 	await removeOwned(name);
 	const id = await createContainer(name, await baseSpec(accountId, { kind: 'login', env: ['CCM_PANE_CMD=ccm-login'] }));
 	await startContainer(id);
@@ -50,6 +58,31 @@ export async function startLogin(accountId: string): Promise<string> {
 export async function loginContainer(accountId: string): Promise<string | null> {
 	const info = await inspectContainer(loginName(accountId));
 	return info?.State.Running && info.Config.Labels?.[LABELS.instance] === config.instance ? info.Id : null;
+}
+
+/** Accounts with a sign-in still open, so the page can offer to continue it. */
+export async function loginsInProgress(): Promise<string[]> {
+	const list = await listContainers([`${LABELS.instance}=${config.instance}`, `${LABELS.kind}=login`]).catch(() => []);
+	return list.filter((c) => c.State === 'running').map((c) => c.Labels[LABELS.account]);
+}
+
+// A sign-in left open (a closed tab, a phone that went to sleep) is cleaned up after this.
+const LOGIN_TTL_S = 30 * 60;
+
+/** Removes sign-in containers nobody finished. */
+export async function sweepLogins() {
+	const list = await listContainers([`${LABELS.instance}=${config.instance}`, `${LABELS.kind}=login`]);
+	const now = Date.now() / 1000;
+	for (const c of list) if (c.State !== 'running' || now - c.Created > LOGIN_TTL_S) await removeContainer(c.Id).catch(() => {});
+}
+
+/** Types into the sign-in terminal through tmux: works while the browser's terminal is reconnecting. */
+export async function typeIntoLogin(accountId: string, text: string) {
+	const container = await loginContainer(accountId);
+	if (!container) throw new BadRequest('The sign-in has ended. Start it again.');
+	// "--": a code starting with "-" would otherwise be read as a flag.
+	await exec(container, ['tmux', 'send-keys', '-t', 'main', '-l', '--', text], { user: 'node' });
+	await exec(container, ['tmux', 'send-keys', '-t', 'main', 'Enter'], { user: 'node' });
 }
 
 export async function stopLogin(accountId: string) {

@@ -46,4 +46,6 @@ Every screen of cc·modern, from a test install with demo data: the conversation
   <img src="phone-session.png" width="260" alt="A session on a phone, with the key bar" />
   <img src="phone-new.png" width="260" alt="New session on a phone" />
   <img src="phone-sign-in.png" width="260" alt="Signing in on a phone: the sign-in link as a button, and a box to paste the code" />
+  <img src="phone-accounts.png" width="260" alt="Accounts on a phone" />
+  <img src="phone-add-account.png" width="260" alt="Adding a model account on a phone: pick a provider first" />
 </p>

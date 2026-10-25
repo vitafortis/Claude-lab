@@ -148,8 +148,15 @@
 		{ label: '⏎', seq: '\r', title: 'Enter' }
 	];
 
-	function sendCompose(e: SubmitEvent) {
+	async function sendCompose(e: SubmitEvent) {
 		e.preventDefault();
+		if (!term?.isOpen()) {
+			// Reconnecting (a phone back from another tab): send through the server instead.
+			// tmux would type a newline as Enter, so a multi-line message goes as one line.
+			const text = compose.replace(/\s*\n\s*/g, ' ').trim();
+			if (await sendToSession(s, text ? { text, enter: true } : { enter: true })) compose = '';
+			return;
+		}
 		if (!compose) {
 			term?.input('\r');
 			return;

@@ -106,6 +106,8 @@ export interface ContainerSummary {
 	Id: string;
 	Names: string[];
 	Image: string;
+	/** Unix seconds. */
+	Created: number;
 	State: string;
 	Status: string;
 	Labels: Record<string, string>;

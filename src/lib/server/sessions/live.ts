@@ -12,6 +12,7 @@ import { checkPr } from './prs.ts';
 import { reconcile, runningContainer } from './runtime.ts';
 import { metaDir } from './storage.ts';
 import { latestExcerpt, latestSummary } from './transcripts.ts';
+import { sweepLogins } from '../accounts.ts';
 import type { GitState, Session, SessionLive } from '#lib/types.ts';
 
 const FAST_MS = 2500;
@@ -52,6 +53,7 @@ async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 's
 
 async function pollOnce() {
 	await reconcile().catch((err) => console.error('[cc-modern] reconcile failed:', err instanceof Error ? err.message : err));
+	if (tick % 30 === 0) await sweepLogins().catch(() => {});
 	const withGit = tick++ % GIT_EVERY === 0;
 	const sessions = listSessions();
 	const results = await Promise.all(

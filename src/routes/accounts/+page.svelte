@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
 	import {
 		Building2,
 		CircleCheck,
 		CircleHelp,
 		ChevronDown,
+		ChevronLeft,
+		ChevronRight,
 		ChevronUp,
 		CircleX,
 		ExternalLink,
@@ -46,6 +48,8 @@
 	// The account dialog adds one (any kind) or edits one (its kind is fixed).
 	let editing = $state<ModelAccount | null>(null);
 	let adding = $state(false);
+	// Adding is two steps: pick a provider from a short list, then its fields.
+	let step = $state<'pick' | 'form'>('pick');
 	let kind = $state<AccountKind>('subscription');
 	let name = $state('');
 	let fields = $state<Record<string, string>>({});
@@ -73,11 +77,13 @@
 		name = data.accounts.length ? '' : 'Personal';
 		fields = defaultsFor(kind);
 		formError = '';
+		step = 'pick';
 		adding = true;
 	}
 
 	function openEdit(a: ModelAccount) {
 		editing = a;
+		step = 'form';
 		kind = a.kind;
 		name = a.name;
 		fields = defaultsFor(a.kind, a.config);
@@ -88,6 +94,10 @@
 	function pickKind(k: AccountKind) {
 		kind = k;
 		fields = defaultsFor(k);
+		formError = '';
+		step = 'form';
+		// The form shares the list's scroll area: start it at the top.
+		void tick().then(() => document.querySelector('dialog[open] .overflow-y-auto')?.scrollTo(0, 0));
 	}
 
 	async function saveAccount(e: SubmitEvent) {
@@ -120,15 +130,17 @@
 		gemini: { title: 'Sign in to Google', help: 'Open the link Gemini prints, approve, then paste the code back into the terminal.' }
 	};
 
-	async function startLogin(a: ModelAccount) {
+	/** Opens the sign-in terminal: the one already running for the account, or a new one. */
+	async function startLogin(a: ModelAccount, restart = false) {
 		login = a;
+		markSignIn(a.id);
 		loginReady = false;
 		loginLink = null;
 		loginLinks = [];
 		loginCode = null;
 		pasted = '';
 		try {
-			await api.post(`/api/model-accounts/${a.id}/login`);
+			await api.post(`/api/model-accounts/${a.id}/login`, { restart });
 			loginReady = true;
 		} catch (err) {
 			login = null;
@@ -149,6 +161,7 @@
 		}
 		finishing = false;
 		login = null;
+		markSignIn(null);
 		await invalidateAll();
 	}
 
@@ -167,19 +180,56 @@
 		return () => clearInterval(t);
 	});
 
-	/** Types the code from the provider into the terminal and presses Enter. */
-	function sendPasted(e: SubmitEvent) {
+	/**
+	 * Types the code from the provider into the terminal and presses Enter. It goes through
+	 * the server, not the terminal's connection, which a phone drops while the provider's page
+	 * is open in another tab.
+	 */
+	let sending = $state(false);
+	async function sendPasted(e: SubmitEvent) {
 		e.preventDefault();
 		const text = pasted.trim();
-		if (!text || !loginTerm) return;
-		loginTerm.input(text);
-		setTimeout(() => loginTerm?.input('\r'), 50);
-		pasted = '';
+		if (!text || !login) return;
+		sending = true;
+		try {
+			await api.post(`/api/model-accounts/${login.id}/login/input`, { text });
+			pasted = '';
+			toast('success', 'Sent the code', 'Press Done once the terminal says you’re signed in.');
+		} catch (err) {
+			toast('error', "Couldn't send the code", errorMessage(err));
+		}
+		sending = false;
 	}
 
-	// Closing the page mid-sign-in still cleans up the container.
-	onDestroy(() => {
-		if (login) void api.del(`/api/model-accounts/${login.id}/login`).catch(() => {});
+	/** Hides the sign-in without ending it: the container keeps waiting for the code (for 30 minutes). */
+	function hideLogin() {
+		login = null;
+		markSignIn(null);
+		void invalidateAll();
+	}
+
+	async function restartLogin() {
+		const a = login;
+		if (!a) return;
+		const ok = await confirmAction({ title: 'Start the sign-in over?', body: 'You get a new link; a code from the old one will no longer work.', confirmLabel: 'Start over' });
+		if (ok) void startLogin(a, true);
+	}
+
+	const signingIn = $derived(new Set(data.signingIn));
+
+	// The open sign-in is kept in the address (?signin=<id>): a phone that reloads the page
+	// after a trip to the provider's page lands back in the same sign-in.
+	function markSignIn(id: string | null) {
+		const url = new URL(location.href);
+		if (id) url.searchParams.set('signin', id);
+		else url.searchParams.delete('signin');
+		history.replaceState(history.state, '', url);
+	}
+	onMount(() => {
+		const id = page.url.searchParams.get('signin');
+		const a = id && data.signingIn.includes(id) ? data.accounts.find((x) => x.id === id) : null;
+		if (a) void startLogin(a);
+		else if (id) markSignIn(null);
 	});
 
 	async function check(a: ModelAccount) {
@@ -392,14 +442,16 @@
 			<div class="card divide-y divide-border">
 				{#each data.accounts as a (a.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
-						<span class="grid size-9 shrink-0 place-items-center rounded-full bg-primary-soft text-primary"><KeyRound class="size-4" /></span>
-						<div class="min-w-0 flex-1">
+						<span class="grid size-9 max-sm:hidden shrink-0 place-items-center rounded-full bg-primary-soft text-primary"><KeyRound class="size-4" /></span>
+						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">{a.name} <AgentBadge agent={a.agent} /> {@render statusBadge(a)}</p>
 							<p class="truncate text-xs text-muted-foreground">{details(a)}</p>
 						</div>
-						<div class="flex items-center gap-1.5">
+						<div class="ml-auto flex items-center gap-1.5">
 							{#if ACCOUNT_KINDS[a.kind].signIn}
-								<button class="btn btn-sm {a.status === 'signed_in' ? 'btn-ghost' : 'btn-primary'}" onclick={() => startLogin(a)}><LogIn />{a.status === 'signed_in' ? 'Sign in again' : 'Sign in'}</button>
+								<button class="btn btn-sm {a.status === 'signed_in' ? 'btn-ghost' : 'btn-primary'}" onclick={() => startLogin(a)}
+									><LogIn />{signingIn.has(a.id) ? 'Continue sign-in' : a.status === 'signed_in' ? 'Sign in again' : 'Sign in'}</button
+								>
 							{/if}
 							<button class="btn btn-ghost btn-sm" disabled={checking === a.id} onclick={() => check(a)}>
 								{#if checking === a.id}<LoaderCircle class="animate-spin" />{:else}<RefreshCw />{/if}Check
@@ -432,7 +484,7 @@
 							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match earlier" disabled={i === 0} onclick={() => moveProfile(i, -1)}><ChevronUp /></button>
 							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match later" disabled={i === data.profiles.length - 1} onclick={() => moveProfile(i, 1)}><ChevronDown /></button>
 						</div>
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
 								{p.name}
 								{#if acct}<AgentBadge agent={acct.agent} />{/if}
@@ -444,8 +496,10 @@
 								{#each p.repos as r (r)}<span class="badge font-mono">{r}</span>{:else}<span class="text-xs text-muted-foreground">No repos: only used when picked</span>{/each}
 							</p>
 						</div>
-						<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openProfile(p)}><Pencil /></button>
-						<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeProfile(p)}><Trash2 /></button>
+						<div class="ml-auto flex items-center gap-1">
+							<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openProfile(p)}><Pencil /></button>
+							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeProfile(p)}><Trash2 /></button>
+						</div>
 					</div>
 				{:else}
 					<p class="flex items-center justify-center gap-2 px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
@@ -477,7 +531,7 @@
 				{#each data.githubAccounts as a (a.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
 						{#if a.avatarUrl}<img src={a.avatarUrl} alt="" class="size-9 shrink-0 rounded-full border border-border" />{/if}
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
 								{a.login}{#if a.name}<span class="font-normal text-muted-foreground">{a.name}</span>{/if}
 								<span class="badge">{a.kind === 'oauth' ? 'Signed in' : 'Token'}</span>
@@ -487,8 +541,10 @@
 								{#if a.scopes}<span class="font-mono text-[0.6875rem]">· {a.scopes}</span>{/if}
 							</p>
 						</div>
-						<button class="btn btn-ghost btn-icon btn-sm" title="Refresh organizations" onclick={() => refreshGithub(a)}><RefreshCw /></button>
-						<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Disconnect" onclick={() => removeGithub(a)}><Trash2 /></button>
+						<div class="ml-auto flex items-center gap-1">
+							<button class="btn btn-ghost btn-icon btn-sm" title="Refresh organizations" onclick={() => refreshGithub(a)}><RefreshCw /></button>
+							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Disconnect" onclick={() => removeGithub(a)}><Trash2 /></button>
+						</div>
 					</div>
 				{:else}
 					<p class="px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">No GitHub accounts. Public repos still work without one.</p>
@@ -498,77 +554,92 @@
 	</div>
 </div>
 
-<Dialog bind:open={adding} title={editing ? `Edit ${editing.name}` : 'Add a model account'} width="max-w-2xl">
-	<form id="add-account" class="space-y-4" onsubmit={saveAccount}>
-		{#if !editing}
+<Dialog
+	bind:open={adding}
+	title={editing ? `Edit ${editing.name}` : step === 'pick' ? 'Add a model account' : `Add ${spec.label}`}
+	description={step === 'pick' ? 'Where the model runs, and how sessions sign in to it.' : undefined}
+	width="max-w-xl"
+>
+	{#if step === 'pick'}
+		<div class="space-y-4">
 			{#each GROUPS as g (g)}
 				<div>
 					<p class="mb-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">{g}</p>
-					<div class="grid gap-2 sm:grid-cols-2">
+					<div class="divide-y divide-border overflow-hidden rounded-xl border border-border">
 						{#each kindsIn(g) as [value, k] (value)}
-							<label class="flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors {kind === value ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}">
-								<input type="radio" name="kind" {value} checked={kind === value} onchange={() => pickKind(value)} class="mt-1 accent-[var(--primary)]" />
-								<span class="min-w-0">
-									<span class="block text-[0.8125rem] font-medium">{k.label}</span>
-									<span class="block text-xs text-muted-foreground">{k.description}</span>
+							<button type="button" class="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/40 active:bg-accent/60" onclick={() => pickKind(value)}>
+								<span class="min-w-0 flex-1">
+									<span class="flex items-center gap-2 text-[0.8125rem] font-medium">{k.label}{#if k.remoteControl}<span class="badge">Remote Control</span>{/if}</span>
+									<span class="line-clamp-2 text-xs text-muted-foreground">{k.description}</span>
 								</span>
-							</label>
+								<ChevronRight class="size-4 shrink-0 text-muted-foreground" />
+							</button>
 						{/each}
 					</div>
 				</div>
 			{/each}
-		{:else}
-			<p class="flex items-center gap-2 text-[0.8125rem]"><AgentBadge agent={spec.agent} />{spec.label}</p>
-		{/if}
-		<div class="grid gap-3 sm:grid-cols-2">
-			<div class="sm:col-span-2">
-				<label class="label" for="aname">Name</label>
-				<input id="aname" class="input" placeholder="Personal, Work…" bind:value={name} />
-			</div>
-			{#each spec.fields as f (f.key)}
-				<div class={f.multiline || f.options || f.key === 'baseUrl' ? 'sm:col-span-2' : ''}>
-					<label class="label" for="f-{f.key}">{f.label}{#if !f.required}<span class="font-normal text-muted-foreground"> · optional</span>{/if}</label>
-					{#if f.options}
-						<select id="f-{f.key}" class="input" bind:value={fields[f.key]}>
-							{#each f.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
-						</select>
-					{:else if f.multiline}
-						<textarea
-							id="f-{f.key}"
-							class="input min-h-28 py-2 font-mono text-xs"
-							placeholder={editing?.secrets.includes(f.key) ? 'Stored. Paste a new one to replace it.' : f.placeholder}
-							bind:value={fields[f.key]}
-						></textarea>
-					{:else}
-						<input
-							id="f-{f.key}"
-							class="input {f.secret || f.key.endsWith('Model') ? 'font-mono text-xs' : ''}"
-							type={f.secret ? 'password' : 'text'}
-							autocomplete="off"
-							placeholder={f.secret && editing?.secrets.includes(f.key) ? '•••••••• stored; type to replace' : f.placeholder}
-							bind:value={fields[f.key]}
-						/>
-					{/if}
-					{#if f.help}<p class="mt-1 text-xs text-muted-foreground">{f.help}</p>{/if}
-				</div>
-			{/each}
 		</div>
-		<p class="text-xs text-muted-foreground">
-			{#if spec.signIn}After saving, a terminal opens here to sign in. The sign-in stays in this account's folder on the server.
-			{:else}Keys are stored encrypted and passed to {AGENT_LABEL[spec.agent]} as environment variables. Check sends a tiny request to make sure they work.{/if}
-		</p>
-		{#if formError}<p class="text-xs text-danger">{formError}</p>{/if}
-	</form>
+	{:else}
+		<form id="add-account" class="space-y-4" onsubmit={saveAccount}>
+			<div class="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2.5">
+				<span class="min-w-0 flex-1">
+					<span class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium"><AgentBadge agent={spec.agent} />{spec.label}</span>
+					<span class="mt-0.5 block text-xs text-muted-foreground">{spec.description}</span>
+				</span>
+				{#if !editing}<button type="button" class="btn btn-ghost btn-sm -mr-1 shrink-0" onclick={() => (step = 'pick')}><ChevronLeft />Change</button>{/if}
+			</div>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<div class="sm:col-span-2">
+					<label class="label" for="aname">Name</label>
+					<input id="aname" class="input" placeholder="Personal, Work…" bind:value={name} />
+				</div>
+				{#each spec.fields as f (f.key)}
+					<div class={f.multiline || f.options || f.key === 'baseUrl' ? 'sm:col-span-2' : ''}>
+						<label class="label" for="f-{f.key}">{f.label}{#if !f.required}<span class="font-normal text-muted-foreground"> · optional</span>{/if}</label>
+						{#if f.options}
+							<select id="f-{f.key}" class="input" bind:value={fields[f.key]}>
+								{#each f.options as o (o.value)}<option value={o.value}>{o.label}</option>{/each}
+							</select>
+						{:else if f.multiline}
+							<textarea
+								id="f-{f.key}"
+								class="input min-h-28 py-2 font-mono text-xs"
+								placeholder={editing?.secrets.includes(f.key) ? 'Stored. Paste a new one to replace it.' : f.placeholder}
+								bind:value={fields[f.key]}
+							></textarea>
+						{:else}
+							<input
+								id="f-{f.key}"
+								class="input {f.secret || f.key.endsWith('Model') ? 'font-mono text-xs' : ''}"
+								type={f.secret ? 'password' : 'text'}
+								autocomplete="off"
+								placeholder={f.secret && editing?.secrets.includes(f.key) ? '•••••••• stored; type to replace' : f.placeholder}
+								bind:value={fields[f.key]}
+							/>
+						{/if}
+						{#if f.help}<p class="mt-1 text-xs text-muted-foreground">{f.help}</p>{/if}
+					</div>
+				{/each}
+			</div>
+			<p class="text-xs text-muted-foreground">
+				{#if spec.signIn}After saving, a terminal opens here to sign in. The sign-in stays in this account's folder on the server.
+				{:else}Keys are stored encrypted and passed to {AGENT_LABEL[spec.agent]} as environment variables. Check sends a tiny request to make sure they work.{/if}
+			</p>
+			{#if formError}<p class="text-xs text-danger">{formError}</p>{/if}
+		</form>
+	{/if}
 	{#snippet footer()}
 		<button class="btn btn-ghost" onclick={() => (adding = false)}>Cancel</button>
-		<button class="btn btn-primary" form="add-account" disabled={saving}>
-			{#if saving}<LoaderCircle class="animate-spin" />{/if}{editing ? 'Save' : spec.signIn ? 'Add and sign in' : 'Add account'}
-		</button>
+		{#if step === 'form'}
+			<button class="btn btn-primary" form="add-account" disabled={saving}>
+				{#if saving}<LoaderCircle class="animate-spin" />{/if}{editing ? 'Save' : spec.signIn ? 'Add and sign in' : 'Add account'}
+			</button>
+		{/if}
 	{/snippet}
 </Dialog>
 
 <Dialog
-	bind:open={() => !!login, (v) => !v && !finishing && finishLogin()}
+	bind:open={() => !!login, (v) => !v && !finishing && hideLogin()}
 	title="{login ? SIGN_IN[login.agent].title : ''}{login ? ` · ${login.name}` : ''}"
 	description={login ? SIGN_IN[login.agent].help : ''}
 	width="max-w-4xl"
@@ -590,13 +661,14 @@
 		{#if login?.agent !== 'codex'}
 			<!-- Claude and Gemini hand back a code to paste in; pasting into a terminal is fiddly on phones. -->
 			<form class="flex min-w-56 flex-1 gap-2" onsubmit={sendPasted}>
-				<input class="input h-8 font-mono text-xs" placeholder="Paste the code from the sign-in page" autocomplete="off" bind:value={pasted} disabled={!loginReady} />
-				<button class="btn btn-secondary btn-sm shrink-0" disabled={!pasted.trim()}><Send />Send</button>
+				<input class="input h-9 font-mono text-xs" placeholder="Paste the code from the sign-in page" autocomplete="off" autocapitalize="off" spellcheck="false" bind:value={pasted} disabled={!loginReady} />
+				<button class="btn btn-secondary h-9 shrink-0" disabled={!pasted.trim() || sending}>{#if sending}<LoaderCircle class="animate-spin" />{:else}<Send />{/if}Send</button>
 			</form>
 		{/if}
 	</div>
-	<p class="mt-2 text-xs text-muted-foreground">The login is saved in this account's folder on the server and shared by its sessions.</p>
+	<p class="mt-2 text-xs text-muted-foreground">You can switch to the sign-in page and come back: closing this keeps the sign-in waiting for 30 minutes. The login is saved in this account's folder on the server and shared by its sessions.</p>
 	{#snippet footer()}
+		<button class="btn btn-ghost mr-auto" disabled={finishing || !loginReady} onclick={restartLogin}><RefreshCw />Start over</button>
 		<button class="btn btn-primary" disabled={finishing} onclick={finishLogin}>
 			{#if finishing}<LoaderCircle class="animate-spin" />{/if}Done
 		</button>
