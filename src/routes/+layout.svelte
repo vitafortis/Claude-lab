@@ -113,7 +113,7 @@
 				href={item.href}
 				title={item.label}
 				class="relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[0.8125rem] font-medium transition-colors {active
-					? 'bg-muted text-foreground'
+					? 'bg-accent text-foreground shadow-surface'
 					: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'}"
 			>
 				{#if active}<span class="absolute top-1.5 bottom-1.5 left-0 w-0.5 rounded-full bg-primary"></span>{/if}
@@ -160,7 +160,7 @@
 
 	{#if data.viewer && data.auth === 'authenticated' && !compact}
 		<a href="/settings#account" title="My account" class="flex items-center gap-2.5 border-t border-border px-3 py-2.5 transition-colors hover:bg-accent/60">
-			<span class="grid size-7 shrink-0 place-items-center rounded-full bg-muted text-[0.6875rem] font-semibold text-foreground uppercase">
+			<span class="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft text-[0.6875rem] font-semibold text-primary uppercase">
 				{(data.viewer.name ?? data.viewer.email).slice(0, 1)}
 			</span>
 			<div class="min-w-0 flex-1">

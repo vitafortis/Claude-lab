@@ -52,8 +52,8 @@
 				<ol class="mt-5 space-y-2">
 					{#each steps as step, i (step.label)}
 						<li>
-							<a href={step.href} class="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-input hover:bg-accent/40">
-								<span class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold {step.done ? 'bg-success/15 text-success' : 'bg-muted text-foreground'}">
+							<a href={step.href} class="flex items-center gap-3 rounded-xl border border-border px-4 py-3 transition-colors hover:border-primary/40 hover:bg-accent/40">
+								<span class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold {step.done ? 'bg-success/15 text-success' : 'bg-primary-soft text-primary'}">
 									{#if step.done}<Check class="size-3.5" />{:else}{i + 1}{/if}
 								</span>
 								<span class="min-w-0 flex-1">
