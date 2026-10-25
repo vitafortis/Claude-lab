@@ -130,6 +130,8 @@ function migrate(h: DatabaseSync) {
 	add('linear_issue_id', 'TEXT');
 	add('linear_identifier', 'TEXT');
 	add('linear_url', 'TEXT');
+	const ghCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('github_accounts')`).all() as { name: string }[]).map((c) => c.name));
+	if (!ghCols.has('label')) h.exec('ALTER TABLE github_accounts ADD COLUMN label TEXT');
 	const accountCols = new Set((h.prepare(`SELECT name FROM pragma_table_info('claude_accounts')`).all() as { name: string }[]).map((c) => c.name));
 	if (!accountCols.has('config')) h.exec(`ALTER TABLE claude_accounts ADD COLUMN config TEXT NOT NULL DEFAULT '{}'`);
 	h.exec(`
@@ -420,6 +422,7 @@ export function deleteAccount(id: string): boolean {
 function toGithubAccount(r: Row): GithubAccount {
 	return {
 		id: r.id as string,
+		label: (r.label as string) ?? null,
 		login: r.login as string,
 		name: (r.name as string) ?? null,
 		avatarUrl: (r.avatar_url as string) ?? null,
@@ -461,10 +464,22 @@ export type GithubAccountInput = {
 	gitEmail: string;
 };
 
-/** Adds an account, or refreshes the token of the one already saved for that login. */
-export function upsertGithubAccount(input: GithubAccountInput): GithubAccount {
-	const existing = db().prepare('SELECT id FROM github_accounts WHERE login = ? COLLATE NOCASE').get(input.login) as { id: string } | undefined;
-	const id = existing?.id ?? randomUUID();
+/**
+ * Saves a token. Several tokens can sign in as the same login (one per org, say), so a new
+ * one is added unless it's the same token again, or another GitHub sign-in for the login
+ * (which replaces the last). `replace` overwrites that connection with whatever user the
+ * new token is for, keeping its id, so sessions and automations using it keep it.
+ */
+export function upsertGithubAccount(input: GithubAccountInput, opts: { label?: string | null; replace?: string } = {}): GithubAccount {
+	let id = opts.replace;
+	if (!id) {
+		const same = (db().prepare('SELECT id, kind FROM github_accounts WHERE login = ? COLLATE NOCASE').all(input.login) as { id: string; kind: string }[]).find(
+			(r) => (input.kind === 'oauth' && r.kind === 'oauth') || getGithubToken(r.id) === input.token
+		);
+		id = same?.id;
+	}
+	const existing = !!id && !!getGithubAccount(id);
+	id ??= randomUUID();
 	const secret = encrypt(input.token, `github:${id}`);
 	if (existing) {
 		db()
@@ -472,15 +487,20 @@ export function upsertGithubAccount(input: GithubAccountInput): GithubAccount {
 				'UPDATE github_accounts SET login = ?, name = ?, avatar_url = ?, kind = ?, secret = ?, scopes = ?, orgs = ?, git_name = ?, git_email = ? WHERE id = ?'
 			)
 			.run(input.login, input.name, input.avatarUrl, input.kind, secret, input.scopes, JSON.stringify(input.orgs), input.gitName, input.gitEmail, id);
+		if (opts.label !== undefined) setGithubLabel(id, opts.label);
 	} else {
 		db()
 			.prepare(
-				`INSERT INTO github_accounts (id, login, name, avatar_url, kind, secret, scopes, orgs, git_name, git_email, created_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				`INSERT INTO github_accounts (id, label, login, name, avatar_url, kind, secret, scopes, orgs, git_name, git_email, created_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			)
-			.run(id, input.login, input.name, input.avatarUrl, input.kind, secret, input.scopes, JSON.stringify(input.orgs), input.gitName, input.gitEmail, now());
+			.run(id, opts.label ?? null, input.login, input.name, input.avatarUrl, input.kind, secret, input.scopes, JSON.stringify(input.orgs), input.gitName, input.gitEmail, now());
 	}
 	return getGithubAccount(id)!;
+}
+
+export function setGithubLabel(id: string, label: string | null) {
+	db().prepare('UPDATE github_accounts SET label = ? WHERE id = ?').run(label || null, id);
 }
 
 export function setGithubOrgs(id: string, orgs: string[]) {

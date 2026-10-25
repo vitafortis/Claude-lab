@@ -21,3 +21,8 @@ export function ago(iso: string | null | undefined): string {
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** A GitHub connection as pickers show it: its name, then the login it signs in as. */
+export function githubLabel(a: { label: string | null; login: string }): string {
+	return a.label ? `${a.label} · ${a.login}` : a.login;
+}

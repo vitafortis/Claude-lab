@@ -76,7 +76,7 @@
 		<Search class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
 		<input
 			class="input pl-9 font-mono text-[0.8125rem]"
-			placeholder={account ? `Search ${account.login}'s repositories, or paste a URL` : 'owner/name or https://… git URL'}
+			placeholder={account ? `Search ${account.label ?? account.login}'s repositories, or paste a URL` : 'owner/name or https://… git URL'}
 			bind:value
 			autocomplete="off"
 			spellcheck="false"

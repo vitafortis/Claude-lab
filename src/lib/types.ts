@@ -46,6 +46,8 @@ export interface Profile {
 
 export interface GithubAccount {
 	id: string;
+	/** What the user called this token, e.g. "Work org"; several tokens can share a login. */
+	label: string | null;
 	login: string;
 	name: string | null;
 	avatarUrl: string | null;

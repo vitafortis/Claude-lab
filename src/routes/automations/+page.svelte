@@ -19,7 +19,7 @@
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
-	import { ago } from '#lib/client/format.ts';
+	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
 	import { parseRepo } from '#lib/launch.ts';
 	import { matchProfile } from '#lib/profiles.ts';
@@ -293,7 +293,7 @@
 			<div>
 				<label class="label flex items-center gap-1.5" for="rgh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 				<select id="rgh" class="input" bind:value={form.githubAccountId}>
-					{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
+					{#each data.githubAccounts as a (a.id)}<option value={a.id}>{githubLabel(a)}</option>{/each}
 					<option value={null}>None (public repo)</option>
 				</select>
 			</div>

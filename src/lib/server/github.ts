@@ -57,7 +57,7 @@ async function orgsOf(token: string): Promise<string[]> {
 }
 
 /** Checks a token and saves (or refreshes) the account it belongs to. */
-export async function addGithubToken(token: string, kind: GithubAccount['kind']): Promise<GithubAccount> {
+export async function addGithubToken(token: string, kind: GithubAccount['kind'], opts: { label?: string | null; replace?: string } = {}): Promise<GithubAccount> {
 	const t = token.trim();
 	if (!t) throw new BadRequest('Paste a token');
 	const { data: user, headers } = await gh<GhUser>(t, '/user');
@@ -73,8 +73,9 @@ export async function addGithubToken(token: string, kind: GithubAccount['kind'])
 		gitName: user.name || user.login,
 		gitEmail: `${user.id}+${user.login}@users.noreply.github.com`
 	};
-	repoCache.delete(user.login);
-	return upsertGithubAccount(input);
+	const account = upsertGithubAccount(input, opts);
+	repoCache.delete(account.id);
+	return account;
 }
 
 export async function refreshOrgs(account: GithubAccount): Promise<string[]> {
@@ -100,7 +101,7 @@ const repoCache = new Map<string, { at: number; repos: GithubRepo[] }>();
 
 /** Every repo the token can see (own, collaborator, org member), most recently pushed first. */
 export async function listRepos(account: GithubAccount, refresh = false): Promise<GithubRepo[]> {
-	const hit = repoCache.get(account.login);
+	const hit = repoCache.get(account.id);
 	if (!refresh && hit && Date.now() - hit.at < 2 * 60_000) return hit.repos;
 	const token = getGithubToken(account.id);
 	if (!token) return [];
@@ -110,7 +111,7 @@ export async function listRepos(account: GithubAccount, refresh = false): Promis
 		repos.push(...data.map(toRepo));
 		if (data.length < 100) break;
 	}
-	repoCache.set(account.login, { at: Date.now(), repos });
+	repoCache.set(account.id, { at: Date.now(), repos });
 	return repos;
 }
 

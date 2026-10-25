@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
-import { handler, NotFound } from '#lib/server/http.ts';
-import { refreshOrgs } from '#lib/server/github.ts';
-import { deleteGithubAccount, getGithubAccount } from '#lib/server/store.ts';
+import { body, handler, NotFound, str } from '#lib/server/http.ts';
+import { addGithubToken, refreshOrgs } from '#lib/server/github.ts';
+import { deleteGithubAccount, getGithubAccount, setGithubLabel } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
 
 /** Re-reads the account's organizations. */
@@ -9,6 +9,18 @@ export const POST: RequestHandler = handler(async ({ params }) => {
 	const a = getGithubAccount(params.id);
 	if (!a) throw new NotFound('Account not found');
 	await refreshOrgs(a);
+	return json(getGithubAccount(a.id));
+});
+
+/** Renames the connection and/or swaps in a new token; sessions and automations using it keep it. */
+export const PATCH: RequestHandler = handler(async ({ params, request }) => {
+	const a = getGithubAccount(params.id);
+	if (!a) throw new NotFound('Account not found');
+	const b = await body(request);
+	const label = 'label' in b ? (str(b, 'label', { max: 80 }) ?? null) : undefined;
+	const token = str(b, 'token', { max: 400 });
+	if (token) return json(await addGithubToken(token, 'pat', { label, replace: a.id }));
+	if (label !== undefined) setGithubLabel(a.id, label);
 	return json(getGithubAccount(a.id));
 });
 

@@ -30,7 +30,7 @@
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
-	import { ago } from '#lib/client/format.ts';
+	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
@@ -335,8 +335,19 @@
 	// ── GitHub ──────────────────────────────────────────────────────────
 
 	let addingToken = $state(false);
+	/** The connection being edited (rename or new token); null when adding one. */
+	let editingGithub = $state<GithubAccount | null>(null);
 	let token = $state('');
+	let tokenLabel = $state('');
 	let tokenError = $state('');
+
+	function openToken(a: GithubAccount | null) {
+		editingGithub = a;
+		tokenLabel = a?.label ?? '';
+		token = '';
+		tokenError = '';
+		addingToken = true;
+	}
 	let device = $state<{ handle: string; userCode: string; verificationUri: string; interval: number } | null>(null);
 	let deviceTimer: ReturnType<typeof setTimeout> | undefined;
 	onDestroy(() => clearTimeout(deviceTimer));
@@ -346,10 +357,14 @@
 		saving = true;
 		tokenError = '';
 		try {
-			const a = await api.post<GithubAccount>('/api/github-accounts', { token });
+			const label = tokenLabel.trim() || null;
+			const a = editingGithub
+				? await api.patch<GithubAccount>(`/api/github-accounts/${editingGithub.id}`, { label, ...(token.trim() ? { token } : {}) })
+				: await api.post<GithubAccount>('/api/github-accounts', { token, label });
 			addingToken = false;
 			token = '';
-			toast('success', `Connected ${a.login}`, a.orgs.length ? `Organizations: ${a.orgs.join(', ')}` : undefined);
+			if (editingGithub) toast('success', `Saved ${githubLabel(a)}`);
+			else toast('success', `Connected ${githubLabel(a)}`, a.orgs.length ? `Organizations: ${a.orgs.join(', ')}` : undefined);
 			await invalidateAll();
 		} catch (err) {
 			tokenError = errorMessage(err);
@@ -399,7 +414,7 @@
 
 	async function removeGithub(a: GithubAccount) {
 		const ok = await confirmAction({
-			title: `Disconnect ${a.login}?`,
+			title: `Disconnect ${githubLabel(a)}?`,
 			body: 'cc·modern forgets the token. Running sessions keep working until they restart. Revoke the token on GitHub too if you no longer need it.',
 			confirmLabel: 'Disconnect',
 			danger: true
@@ -529,7 +544,7 @@
 				</div>
 				<div class="flex gap-2">
 					{#if data.deviceFlow}<button class="btn btn-primary btn-sm" onclick={startDevice}><BrandIcon brand="github" class="size-4" />Sign in with GitHub</button>{/if}
-					<button class="btn btn-secondary btn-sm" onclick={() => ((addingToken = true), (tokenError = ''))}><Plus />Add a token</button>
+					<button class="btn btn-secondary btn-sm" onclick={() => openToken(null)}><Plus />Add a token</button>
 				</div>
 			</div>
 			<div class="card divide-y divide-border">
@@ -538,7 +553,7 @@
 						{#if a.avatarUrl}<img src={a.avatarUrl} alt="" class="size-9 shrink-0 rounded-full border border-border" />{/if}
 						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
-								{a.login}{#if a.name}<span class="font-normal text-muted-foreground">{a.name}</span>{/if}
+								{a.label ?? a.login}<span class="font-normal text-muted-foreground">{a.label ? a.login : a.name}</span>
 								<span class="badge">{a.kind === 'oauth' ? 'Signed in' : 'Token'}</span>
 							</p>
 							<p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -548,6 +563,7 @@
 						</div>
 						<div class="ml-auto flex items-center gap-1">
 							<button class="btn btn-ghost btn-icon btn-sm" title="Refresh organizations" onclick={() => refreshGithub(a)}><RefreshCw /></button>
+							<button class="btn btn-ghost btn-icon btn-sm" title="Rename or replace the token" onclick={() => openToken(a)}><Pencil /></button>
 							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Disconnect" onclick={() => removeGithub(a)}><Trash2 /></button>
 						</div>
 					</div>
@@ -727,23 +743,32 @@
 	{/snippet}
 </Dialog>
 
-<Dialog bind:open={addingToken} title="Add a GitHub token" width="max-w-xl">
+<Dialog bind:open={addingToken} title={editingGithub ? `Edit ${githubLabel(editingGithub)}` : 'Add a GitHub token'} width="max-w-xl">
 	<form id="add-token" class="space-y-3" onsubmit={addToken}>
+		<div>
+			<label class="label" for="tlabel">Name</label>
+			<input id="tlabel" class="input" placeholder="Work org, Personal, Read-only…" maxlength="80" bind:value={tokenLabel} />
+			<p class="mt-1 text-xs text-muted-foreground">Shown when you pick a GitHub account. Optional; without one, the GitHub login is shown.</p>
+		</div>
+		{#if editingGithub}
+			<p class="text-[0.8125rem] text-muted-foreground">To swap in a new token (say the old one expired), paste it below. Sessions and automations using this connection keep it.</p>
+		{:else}
 		<p class="text-[0.8125rem] text-muted-foreground">
 			A <b class="font-medium text-foreground">fine-grained token</b> with access to the repos you want (Contents and Pull requests: read and write) or a
 			<b class="font-medium text-foreground">classic token</b> with <code class="font-mono text-xs">repo</code>, <code class="font-mono text-xs">read:org</code> and
 			<code class="font-mono text-xs">workflow</code>.
 		</p>
+		{/if}
 		<a class="btn btn-secondary btn-sm" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener"><ExternalLink />Create a token on GitHub</a>
 		<div>
-			<label class="label" for="tok">Token</label>
-			<input id="tok" class="input font-mono text-xs" type="password" autocomplete="off" placeholder="github_pat_… or ghp_…" bind:value={token} required />
+			<label class="label" for="tok">{editingGithub ? 'New token' : 'Token'}</label>
+			<input id="tok" class="input font-mono text-xs" type="password" autocomplete="off" placeholder={editingGithub ? 'Leave empty to keep the current token' : 'github_pat_… or ghp_…'} bind:value={token} required={!editingGithub} />
 		</div>
 		{#if tokenError}<p class="text-xs text-danger">{tokenError}</p>{/if}
 	</form>
 	{#snippet footer()}
 		<button class="btn btn-ghost" onclick={() => (addingToken = false)}>Cancel</button>
-		<button class="btn btn-primary" form="add-token" disabled={saving}>{#if saving}<LoaderCircle class="animate-spin" />{/if}Connect</button>
+		<button class="btn btn-primary" form="add-token" disabled={saving}>{#if saving}<LoaderCircle class="animate-spin" />{/if}{editingGithub ? 'Save' : 'Connect'}</button>
 	{/snippet}
 </Dialog>
 

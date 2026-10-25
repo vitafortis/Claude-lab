@@ -36,7 +36,7 @@
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
-	import { ago } from '#lib/client/format.ts';
+	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { deleteSession, relaunchAgent, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
 	import { sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
 	import { displayState } from '#lib/session-state.ts';
@@ -344,7 +344,7 @@
 					<div>
 						<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 						<select id="gh" class="input h-8 text-xs" value={s.githubAccountId ?? ''} onchange={(e) => patch({ githubAccountId: e.currentTarget.value || null })}>
-							{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
+							{#each data.githubAccounts as a (a.id)}<option value={a.id}>{githubLabel(a)}</option>{/each}
 							<option value="">None</option>
 						</select>
 					</div>

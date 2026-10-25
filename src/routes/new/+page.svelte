@@ -11,7 +11,7 @@
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { upsertSession } from '#lib/client/state.svelte.ts';
 	import { parseRepo, slugify } from '#lib/launch.ts';
-	import { ago } from '#lib/client/format.ts';
+	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { matchProfile } from '#lib/profiles.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES, fitPermissionMode } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type GithubPull, type GithubRepo, type PermissionMode, type Session, type SkillOption } from '#lib/types.ts';
@@ -223,7 +223,7 @@
 				<div>
 					<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 					<select id="gh" class="input" bind:value={githubAccountId}>
-						{#each data.githubAccounts as a (a.id)}<option value={a.id}>{a.login}</option>{/each}
+						{#each data.githubAccounts as a (a.id)}<option value={a.id}>{githubLabel(a)}</option>{/each}
 						<option value="">None (public repo)</option>
 					</select>
 					{#if !data.githubAccounts.length}<a href="/accounts#github" class="mt-1.5 block text-xs text-primary">Connect GitHub →</a>{/if}
