@@ -4,6 +4,8 @@
 	import BrandIcon from './BrandIcon.svelte';
 	import SessionTags from './SessionTags.svelte';
 	import StateDot from './StateDot.svelte';
+	import QuestionBar from './QuestionBar.svelte';
+	import { findQuestion } from '#lib/pane.ts';
 	import { ago } from '#lib/client/format.ts';
 	import { sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
 	import { AGENT_LABEL } from '#lib/providers.ts';
@@ -20,6 +22,7 @@
 	const current = $derived(sum?.todos.find((t) => t.status === 'in_progress'));
 	const running = $derived(s.status === 'running');
 	const preview = $derived((live?.tail ?? []).filter((l) => l.trim()).slice(-7));
+	const question = $derived(running && view === 'waiting' ? findQuestion(live?.tail ?? []) : null);
 
 	let reply = $state('');
 	let busy = $state(false);
@@ -90,7 +93,9 @@
 		</a>
 	{/if}
 
-	{#if running && view === 'waiting'}
+	{#if question}
+		<QuestionBar card {question} agentName={AGENT_LABEL[s.agent]} onanswer={(n) => act(async () => void (await sendToSession(s, { keys: [String(n)] })))} oncancel={() => act(async () => void (await sendToSession(s, { keys: ['Escape'] })))} />
+	{:else if running && view === 'waiting'}
 		<form class="mx-4 mb-3 flex gap-2" onsubmit={send}>
 			<input class="input h-8 text-xs" placeholder="Reply to Claude…" bind:value={reply} />
 			<button class="btn btn-secondary btn-sm h-8" disabled={busy} title="Send"><Send /></button>

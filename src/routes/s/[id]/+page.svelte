@@ -38,6 +38,8 @@
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { deleteSession, relaunchAgent, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
+	import QuestionBar from '#lib/components/QuestionBar.svelte';
+	import { findQuestion, type Question } from '#lib/pane.ts';
 	import { sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
 	import { displayState } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
@@ -65,6 +67,18 @@
 	let panel = $state(true);
 	let term = $state<Terminal>();
 	let touch = $state(false);
+	// A menu the agent shows (permission prompt, question, picker), read off the terminal.
+	let question = $state<Question | null>(null);
+	$effect(() => {
+		// The Shell tab's screen is the user's own.
+		if (mode !== 'claude' || !running) question = null;
+	});
+
+	function answer(key: string) {
+		if (term?.isOpen()) term.input(key === 'Escape' ? '\x1b' : key);
+		else void sendToSession(s, { keys: [key] });
+		term?.focus();
+	}
 	// The terminal's connection to the container, shown in the header.
 	let conn = $state<'connecting' | 'open' | 'closed'>('connecting');
 	const CONN = {
@@ -218,9 +232,10 @@
 			{#if running && s.containerId}
 				<!-- The agent's screen only: the Shell tab is a separate terminal the probe doesn't read. -->
 				{#if mode === 'claude'}<LinkBar links={live?.links ?? []} />{/if}
+				{#if question}<QuestionBar {question} {agentName} onanswer={(n) => answer(String(n))} oncancel={() => answer('Escape')} />{/if}
 				<div class="min-h-0 flex-1">
 					{#key `${s.containerId}:${mode}`}
-						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} />
+						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} onscreen={(lines) => (question = mode === 'claude' ? findQuestion(lines) : null)} />
 					{/key}
 				</div>
 				{#if touch}

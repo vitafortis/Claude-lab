@@ -7,13 +7,16 @@
 	let {
 		path,
 		autofocus = false,
-		onstate
+		onstate,
+		onscreen
 	}: {
 		/** The WebSocket path, e.g. /ws/sessions/<id>/terminal?mode=claude. */
 		path: string;
 		/** Take the keyboard once connected (not on touch screens, where it would pop the keyboard up). */
 		autofocus?: boolean;
 		onstate?: (state: 'connecting' | 'open' | 'closed') => void;
+		/** The visible lines as text, shortly after the screen changes. */
+		onscreen?: (lines: string[]) => void;
 	} = $props();
 
 	let host: HTMLDivElement;
@@ -152,6 +155,7 @@
 			let glide = 0;
 			const onTouchStart = (e: TouchEvent) => {
 				cancelAnimationFrame(glide);
+				clearTimeout(screenTimer);
 				touchY = e.touches.length === 1 ? e.touches[0].clientY : null;
 				touchAt = e.timeStamp;
 				speed = 0;
@@ -207,6 +211,18 @@
 			});
 			ro.observe(host);
 
+			let screenTimer: ReturnType<typeof setTimeout> | undefined;
+			const screenChanged = () => {
+				if (!onscreen || screenTimer) return;
+				screenTimer = setTimeout(() => {
+					screenTimer = undefined;
+					const b = term.buffer.active;
+					const lines: string[] = [];
+					for (let y = b.viewportY; y < b.viewportY + term.rows; y++) lines.push(b.getLine(y)?.translateToString(true) ?? '');
+					onscreen(lines);
+				}, 150);
+			};
+
 			const lost = (sock: WebSocket, why: string) => {
 				if (ws !== sock) return;
 				ws = null;
@@ -246,8 +262,8 @@
 				}, 10_000);
 				sock.onmessage = (e) => {
 					heard = Date.now();
-					if (typeof e.data === 'string') term.write(e.data);
-					else if (e.data.byteLength) term.write(new Uint8Array(e.data as ArrayBuffer));
+					if (typeof e.data === 'string') term.write(e.data, screenChanged);
+					else if (e.data.byteLength) term.write(new Uint8Array(e.data as ArrayBuffer), screenChanged);
 				};
 				sock.onclose = (e) => {
 					clearInterval(heartbeat);

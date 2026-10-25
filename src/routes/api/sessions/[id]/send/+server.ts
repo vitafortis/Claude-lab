@@ -5,7 +5,7 @@ import { sendToSession } from '#lib/server/sessions/runtime.ts';
 import type { RequestHandler } from './$types';
 
 // Keys the quick-reply bar can press, by tmux name.
-const KEYS = new Set(['Enter', 'Escape', 'Tab', 'BTab', 'Up', 'Down', 'Left', 'Right', 'C-c', 'C-d', 'y', 'n', '1', '2', '3']);
+const KEYS = new Set(['Enter', 'Escape', 'Tab', 'BTab', 'Up', 'Down', 'Left', 'Right', 'C-c', 'C-d', 'y', 'n', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
 
 /** Types into the session without opening its terminal (quick replies from the overview). */
 export const POST: RequestHandler = handler(async ({ params, request }) => {

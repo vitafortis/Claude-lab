@@ -72,6 +72,8 @@ const AGENT_COMMAND: Record<Agent, RegExp> = {
 export function paneState(command: string, lines: string[], agent: Agent = 'claude'): PaneState {
 	const recent = lines.slice(-25).join('\n');
 	if (AGENT_COMMAND[agent].test(command)) {
+		// A menu first: its footer can read like a spinner's ("Esc to cancel").
+		if (findQuestion(lines)) return 'waiting';
 		if (WORKING.test(recent)) return 'working';
 		if (WAITING.some((r) => r.test(recent))) return 'waiting';
 		return 'idle';
@@ -132,4 +134,54 @@ export function findDeviceCode(lines: string[]): string | null {
 	const text = lines.join('\n');
 	const all = [...text.matchAll(/\b([A-Z0-9]{4,6}-[A-Z0-9]{4,6})\b/g)].map((m) => m[1]).filter((c) => /[A-Z]/.test(c) && /\d/.test(c));
 	return all.at(-1) ?? null;
+}
+
+export type QuestionOption = { n: number; label: string; detail: string; selected: boolean };
+export type Question = { title: string; options: QuestionOption[] };
+
+// "❯ 1. Yes" / "  2. No, and tell Claude…": a menu row, maybe inside a │ box.
+const OPTION = /^[│|\s]*([❯›>●])?\s*(\d{1,2})\.\s+(.+?)[\s│|]*$/;
+const RULE = /^[\s─━═▔▁╭╮╰╯│|-]*$/;
+
+/**
+ * The numbered menu on screen, if the agent is showing one: a permission
+ * prompt, a question it asks, a picker. Pressing an option's number picks it. Rows that wrap
+ * are left out of the label; text in a second column (after a wide gap) is the detail.
+ */
+export function findQuestion(lines: string[]): Question | null {
+	const rows = lines.slice(-40);
+	let end = -1;
+	for (let i = rows.length - 1; i >= 0; i--) {
+		if (OPTION.test(rows[i])) {
+			end = i;
+			break;
+		}
+	}
+	if (end < 0) return null;
+	// Walk up through the menu: numbered rows, plus wrapped or detail lines between them.
+	const found: QuestionOption[] = [];
+	let start = end;
+	for (let i = end; i >= 0 && start - i < 30; i--) {
+		const m = OPTION.exec(rows[i]);
+		if (m) {
+			const [label, ...rest] = m[3].split(/\s{2,}/);
+			found.unshift({ n: Number(m[2]), label: label.trim(), detail: rest.join(' ').trim(), selected: !!m[1] });
+			start = i;
+			if (m[2] === '1') break;
+		} else if (RULE.test(rows[i])) break;
+	}
+	const options = found.filter((o, i) => o.n === i + 1);
+	// A menu has a cursor on one row; a numbered list in the agent's reply doesn't.
+	if (options.length < 2 || options.length !== found.length || !options.some((o) => o.selected)) return null;
+	// The question: in the lines just above the options, the one asking ("…?"), else the
+	// first of them (a heading; the lines after it may be a description wrapping).
+	const above: string[] = [];
+	for (let i = start - 1; i >= Math.max(0, start - 8); i--) {
+		const t = rows[i].replace(/^[│|\s]+|[\s│|]+$/g, '');
+		if (!t && !above.length) continue;
+		if (!t || RULE.test(t)) break;
+		above.unshift(t);
+	}
+	const title = above.findLast((t) => t.endsWith('?')) ?? above[0] ?? '';
+	return { title, options };
 }
