@@ -124,6 +124,8 @@ async function bridge(ws: WebSocket, target: Target, cols: number, rows: number)
 		}
 		if (msg.t === 'i' && typeof msg.d === 'string') stream.write(msg.d);
 		else if (msg.t === 'r') void resize(clamp(String(msg.c), 20, 500, cols), clamp(String(msg.r), 5, 200, rows));
+		// The browser's heartbeat: an empty frame back tells it the line is still up.
+		else if (msg.t === 'p') ws.send(Buffer.alloc(0), { binary: true });
 	});
 	// Closing the exec detaches this tmux client; Claude keeps running.
 	ws.on('close', () => stream.destroy());

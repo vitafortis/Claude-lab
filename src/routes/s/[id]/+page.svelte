@@ -17,7 +17,6 @@
 		PanelRightOpen,
 		Play,
 		RotateCcw,
-		Send,
 		Sparkles,
 		Square,
 		SquareTerminal,
@@ -65,8 +64,14 @@
 	let mode = $state<'claude' | 'shell'>('claude');
 	let panel = $state(true);
 	let term = $state<Terminal>();
-	let compose = $state('');
-	let showKeys = $state(false);
+	let touch = $state(false);
+	// The terminal's connection to the container, shown in the header.
+	let conn = $state<'connecting' | 'open' | 'closed'>('connecting');
+	const CONN = {
+		connecting: { label: 'Connecting…', dot: 'bg-warning', pulse: true },
+		open: { label: 'Connected', dot: 'bg-success', pulse: false },
+		closed: { label: 'Disconnected', dot: 'bg-danger', pulse: true }
+	} as const;
 	let busy = $state(false);
 	let summarizing = $state(false);
 
@@ -95,9 +100,9 @@
 	const attachCommand = $derived(`docker exec -it -u node ${s.containerName} tmux attach -t main`);
 
 	$effect(() => {
-		// Narrow screens start with the panel closed and the key bar open.
+		// Narrow screens start with the panel closed; touch screens get the key bar.
 		if (matchMedia('(max-width: 1023px)').matches) panel = false;
-		if (matchMedia('(pointer: coarse)').matches) showKeys = true;
+		touch = matchMedia('(pointer: coarse)').matches;
 	});
 
 	async function act(fn: () => Promise<unknown>) {
@@ -148,25 +153,6 @@
 		{ label: '⏎', seq: '\r', title: 'Enter' }
 	];
 
-	async function sendCompose(e: SubmitEvent) {
-		e.preventDefault();
-		if (!term?.isOpen()) {
-			// Reconnecting (a phone back from another tab): send through the server instead.
-			// tmux would type a newline as Enter, so a multi-line message goes as one line.
-			const text = compose.replace(/\s*\n\s*/g, ' ').trim();
-			if (await sendToSession(s, text ? { text, enter: true } : { enter: true })) compose = '';
-			return;
-		}
-		if (!compose) {
-			term?.input('\r');
-			return;
-		}
-		// Bracketed paste keeps multi-line messages together; Enter then submits.
-		term?.input(`\x1b[200~${compose}\x1b[201~`);
-		setTimeout(() => term?.input('\r'), 50);
-		compose = '';
-	}
-
 	const restartItems = $derived([
 		...(running && isClaude ? [{ label: 'Run a skill…', hint: 'Type a skill or command into Claude', icon: Wand, onclick: openSkill }, 'separator' as const] : []),
 		{ label: 'Continue newest conversation', hint: `Restart ${agentName} and pick up where it left off`, icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
@@ -201,6 +187,15 @@
 				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'shell' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'shell')}><SquareTerminal class="size-3.5" /><span class="max-sm:hidden">Shell</span></button>
 			</div>
 		{/if}
+		{#if running}
+			<span class="flex items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-muted-foreground" title="The terminal's connection to the container: {CONN[conn].label}" aria-live="polite">
+				<span class="relative inline-flex size-2 shrink-0">
+					{#if CONN[conn].pulse}<span class="absolute inset-0 animate-ping rounded-full opacity-60 {CONN[conn].dot}"></span>{/if}
+					<span class="relative size-2 rounded-full {CONN[conn].dot}"></span>
+				</span>
+				<span class="max-sm:sr-only">{CONN[conn].label}</span>
+			</span>
+		{/if}
 		{#if s.rcUrl && running}
 			<a class="btn btn-secondary btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open this session in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
 		{/if}
@@ -224,25 +219,20 @@
 				{#if mode === 'claude'}<LinkBar links={live?.links ?? []} />{/if}
 				<div class="min-h-0 flex-1">
 					{#key `${s.containerId}:${mode}`}
-						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" />
+						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} />
 					{/key}
 				</div>
-				<form class="flex shrink-0 flex-wrap items-center gap-1.5 border-t border-term-edge px-2 py-1.5" style="background: var(--term-chrome)" onsubmit={sendCompose}>
-					<button type="button" class="btn btn-ghost btn-icon btn-sm text-[#aab2c0] hover:bg-white/5 hover:text-white" title="Show keys" onclick={() => (showKeys = !showKeys)}><Keyboard /></button>
-					{#if showKeys}
+				{#if touch}
+					<!-- Keys a touch keyboard lacks. Pressing one keeps the terminal focused, so the keyboard stays up. -->
+					<div class="flex shrink-0 items-center gap-1.5 overflow-x-auto border-t border-term-edge px-2 py-1.5" style="background: var(--term-chrome)">
+						<button type="button" class="btn btn-ghost btn-icon btn-sm shrink-0 text-[#aab2c0] hover:bg-white/5 hover:text-white" title="Show the keyboard" onpointerdown={(e) => e.preventDefault()} onclick={() => term?.focus()}><Keyboard /></button>
 						{#each KEYS as k (k.label)}
-							<button type="button" class="h-7 min-w-8 rounded-md border border-term-edge px-2 font-mono text-xs text-[#d5d9e2] hover:bg-white/5" title={k.title} onclick={() => term?.input(k.seq)}>
+							<button type="button" class="h-8 min-w-9 shrink-0 rounded-md border border-term-edge px-2 font-mono text-xs text-[#d5d9e2] hover:bg-white/5 disabled:opacity-40" title={k.title} disabled={conn !== 'open'} onpointerdown={(e) => e.preventDefault()} onclick={() => term?.input(k.seq)}>
 								{#if k.label === '↑'}<ArrowUp class="mx-auto size-3.5" />{:else if k.label === '↓'}<ArrowDown class="mx-auto size-3.5" />{:else if k.label === '⏎'}<CornerDownLeft class="mx-auto size-3.5" />{:else}{k.label}{/if}
 							</button>
 						{/each}
-					{/if}
-					<input
-						class="h-7 min-w-40 flex-1 rounded-md border border-term-edge bg-black/20 px-2.5 text-[0.8125rem] text-[#e6e8ee] outline-none placeholder:text-[#7d8594] focus:border-primary/60"
-						placeholder={mode === 'claude' ? `Message ${agentName}… (or type in the terminal)` : 'Run a command…'}
-						bind:value={compose}
-					/>
-					<button class="btn btn-sm h-7 border border-term-edge text-[#d5d9e2] hover:bg-white/5" title="Send"><Send /></button>
-				</form>
+					</div>
+				{/if}
 			{:else}
 				<div class="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6" style="background: var(--term-bg)">
 					{#if live?.tail?.length}

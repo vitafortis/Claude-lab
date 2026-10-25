@@ -6,10 +6,13 @@
 
 	let {
 		path,
+		autofocus = false,
 		onstate
 	}: {
 		/** The WebSocket path, e.g. /ws/sessions/<id>/terminal?mode=claude. */
 		path: string;
+		/** Take the keyboard once connected (not on touch screens, where it would pop the keyboard up). */
+		autofocus?: boolean;
 		onstate?: (state: 'connecting' | 'open' | 'closed') => void;
 	} = $props();
 
@@ -128,6 +131,17 @@
 			});
 			ro.observe(host);
 
+			const lost = (sock: WebSocket, why: string) => {
+				if (ws !== sock) return;
+				ws = null;
+				if (sock.readyState !== WebSocket.CLOSED) sock.close();
+				reason = why;
+				setConn('closed');
+				if (disposed) return;
+				// Back off up to 10 s; the session may be restarting.
+				timer = setTimeout(connect, Math.min(10_000, 500 * 2 ** retry++));
+			};
+
 			const connect = () => {
 				if (disposed) return;
 				setConn('connecting');
@@ -141,16 +155,27 @@
 					reason = '';
 					setConn('open');
 					sendSize();
+					// Unless the user is typing in a field elsewhere on the page.
+					const el = document.activeElement;
+					const typing = el instanceof HTMLElement && !el.closest('.xterm') && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+					if (autofocus && !typing && !matchMedia('(pointer: coarse)').matches) term.focus();
 				};
-				sock.onmessage = (e) => term.write(typeof e.data === 'string' ? e.data : new Uint8Array(e.data as ArrayBuffer));
+				// A network that drops without a word (a phone changing networks, a laptop
+				// waking) never fires close: ping, and give up on a line that stays silent.
+				let heard = Date.now();
+				const heartbeat = setInterval(() => {
+					if (sock.readyState !== WebSocket.OPEN) return;
+					if (Date.now() - heard > 25_000) lost(sock, '');
+					else sock.send(JSON.stringify({ t: 'p' }));
+				}, 10_000);
+				sock.onmessage = (e) => {
+					heard = Date.now();
+					if (typeof e.data === 'string') term.write(e.data);
+					else if (e.data.byteLength) term.write(new Uint8Array(e.data as ArrayBuffer));
+				};
 				sock.onclose = (e) => {
-					if (ws !== sock) return;
-					ws = null;
-					reason = e.reason && e.reason !== 'ended' ? e.reason : '';
-					setConn('closed');
-					if (disposed) return;
-					// Back off up to 10 s; the session may be restarting.
-					timer = setTimeout(connect, Math.min(10_000, 500 * 2 ** retry++));
+					clearInterval(heartbeat);
+					lost(sock, e.reason && e.reason !== 'ended' ? e.reason : '');
 				};
 			};
 			connect();
@@ -187,7 +212,8 @@
 
 <div class="relative h-full min-h-0 w-full overflow-hidden bg-term" style="background: var(--term-bg)">
 	<!-- Padding sits outside the host: the fit addon sizes rows from the host's own box. -->
-	<div class="absolute inset-0 py-1.5 pl-2">
+	<!-- Dimmed while keystrokes can't reach the container. -->
+	<div class="absolute inset-0 py-1.5 pl-2 transition-opacity duration-300 {conn === 'closed' ? 'opacity-45' : ''}">
 		<div bind:this={host} class="h-full w-full"></div>
 	</div>
 	{#if conn !== 'open'}
