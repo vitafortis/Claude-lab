@@ -37,3 +37,17 @@ test('findRcUrl takes the newest link', () => {
 	assert.equal(findRcUrl(['old https://claude.ai/code/session_abc', 'new https://claude.ai/code/session_XYZ_9?x=1']), 'https://claude.ai/code/session_XYZ_9');
 	assert.equal(findRcUrl(['/rc active']), null);
 });
+
+test('extractLinks joins wrapped URLs and keeps the newest', async () => {
+	const { extractLinks, findDeviceCode } = await import('#lib/pane.ts');
+	const w = 'Open: https://claude.ai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e';
+	const lines = ['Browser didn\'t open? Use the url below to sign in:', '', w, '&response_type=code&redirect_uri=https%3A%2F%2Fconsole', '.anthropic.com%2Foauth%2Fcode%2Fcallback&state=abc', '', 'Paste code here if prompted >'];
+	assert.deepEqual(extractLinks(lines), [
+		'https://claude.ai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fconsole.anthropic.com%2Foauth%2Fcode%2Fcallback&state=abc'
+	]);
+	// Short links aren't joined to the words after them.
+	assert.deepEqual(extractLinks(['See https://x.io/a.', 'then run tests']), ['https://x.io/a']);
+	assert.deepEqual(extractLinks(['│ https://a.io/1 │', 'https://b.io/2 and https://a.io/1']), ['https://b.io/2', 'https://a.io/1']);
+	assert.equal(findDeviceCode(['Enter this one-time code', '   ABCD-12345   ', 'ENG-42 is unrelated']), 'ABCD-12345');
+	assert.equal(findDeviceCode(['nothing here']), null);
+});

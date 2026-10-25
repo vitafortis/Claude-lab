@@ -80,6 +80,8 @@
 				lineHeight: 1,
 				cursorBlink: true,
 				allowProposedApi: true,
+				// Hyperlinks a program prints (OSC 8) open in a new tab, like the plain-text ones.
+				linkHandler: { activate: (_e, uri) => window.open(uri, '_blank', 'noopener') },
 				macOptionIsMeta: true,
 				scrollback: 2000,
 				theme: { ...PALETTE, background: bg }

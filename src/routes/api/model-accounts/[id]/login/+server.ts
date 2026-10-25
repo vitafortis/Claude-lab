@@ -1,14 +1,14 @@
 import { json } from '@sveltejs/kit';
 import { BadRequest, handler, NotFound } from '#lib/server/http.ts';
-import { checkAccount, loginUrl, startLogin, stopLogin } from '#lib/server/accounts.ts';
+import { checkAccount, loginScreen, startLogin, stopLogin } from '#lib/server/accounts.ts';
 import { getAccount } from '#lib/server/store.ts';
 import { ACCOUNT_KINDS } from '#lib/providers.ts';
 import type { RequestHandler } from './$types';
 
-/** The sign-in link, once the agent has printed it. */
+/** The sign-in link, other links and any one-time code, once the agent has printed them. */
 export const GET: RequestHandler = handler(async ({ params }) => {
 	if (!getAccount(params.id)) throw new NotFound('Account not found');
-	return json({ url: await loginUrl(params.id) });
+	return json(await loginScreen(params.id));
 });
 
 /** Starts the sign-in container; the browser then opens its terminal. */

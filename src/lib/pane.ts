@@ -92,3 +92,44 @@ export function findRcUrl(lines: string[]): string | null {
 	const all = lines.join('\n').match(RC_URL);
 	return all ? all[all.length - 1] : null;
 }
+
+const URL_START = /https?:\/\/[^\s"'<>`│┃|]+/g;
+// What a wrapped URL continues with: a run of URL characters and nothing else on the line.
+const URL_REST = /^[\s│┃|]*([A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)[\s│┃|]*$/;
+
+/**
+ * Links on screen, newest last, with URLs that wrapped onto the next lines joined back.
+ * A URL counts as wrapped when it runs to the end of a long line and the next line is
+ * nothing but URL characters (what tmux shows for a long sign-in link).
+ */
+export function extractLinks(lines: string[], max = 5): string[] {
+	const found: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i].replace(/\s+$/, '');
+		for (const m of line.matchAll(URL_START)) {
+			let url = m[0];
+			let j = i;
+			const atEnd = m.index + url.length >= line.length;
+			if (atEnd && line.length >= 40) {
+				while (j + 1 < lines.length) {
+					const next = URL_REST.exec(lines[j + 1]);
+					// Ordinary words are URL characters too: only take lines that look like URL parts.
+					if (!next || !/[/?=&%._-]/.test(next[1]) || /^https?:/.test(next[1])) break;
+					url += next[1];
+					j++;
+					if (lines[j].replace(/\s+$/, '').length < 40) break;
+				}
+			}
+			found.push(url.replace(/[).,;:!?'"\]]+$/, ''));
+		}
+	}
+	const unique = [...new Set(found.reverse())].reverse();
+	return unique.slice(-max);
+}
+
+/** A one-time sign-in code on screen, like Codex's "ABCD-12345". */
+export function findDeviceCode(lines: string[]): string | null {
+	const text = lines.join('\n');
+	const all = [...text.matchAll(/\b([A-Z0-9]{4,6}-[A-Z0-9]{4,6})\b/g)].map((m) => m[1]).filter((c) => /[A-Z]/.test(c) && /\d/.test(c));
+	return all.at(-1) ?? null;
+}

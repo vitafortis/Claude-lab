@@ -16,12 +16,14 @@
 		LoaderCircle,
 		LogIn,
 		Plus,
+		Send,
 		RefreshCw,
 		ShieldCheck,
 		Trash2
 	} from '@lucide/svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import LinkBar from '#lib/components/LinkBar.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
@@ -54,6 +56,10 @@
 	let login = $state<ModelAccount | null>(null);
 	let loginReady = $state(false);
 	let loginLink = $state<string | null>(null);
+	let loginLinks = $state<string[]>([]);
+	let loginCode = $state<string | null>(null);
+	let loginTerm = $state<Terminal>();
+	let pasted = $state('');
 	let finishing = $state(false);
 	let checking = $state<string | null>(null);
 
@@ -118,6 +124,9 @@
 		login = a;
 		loginReady = false;
 		loginLink = null;
+		loginLinks = [];
+		loginCode = null;
+		pasted = '';
 		try {
 			await api.post(`/api/model-accounts/${a.id}/login`);
 			loginReady = true;
@@ -143,16 +152,30 @@
 		await invalidateAll();
 	}
 
-	// The link wraps in the terminal; offer it as a button once the agent has printed it.
+	// Links wrap in the terminal and are hard to select on a phone: offer them as buttons,
+	// with any one-time code, for as long as the sign-in is open.
 	$effect(() => {
-		if (!login || !loginReady || loginLink) return;
+		if (!login || !loginReady) return;
 		const id = login.id;
 		const t = setInterval(async () => {
-			const r = await api.get<{ url: string | null }>(`/api/model-accounts/${id}/login`).catch(() => null);
-			if (r?.url) loginLink = r.url;
+			const r = await api.get<{ url: string | null; links: string[]; code: string | null }>(`/api/model-accounts/${id}/login`).catch(() => null);
+			if (!r) return;
+			if (r.url) loginLink = r.url;
+			loginLinks = r.links;
+			loginCode = r.code;
 		}, 1500);
 		return () => clearInterval(t);
 	});
+
+	/** Types the code from the provider into the terminal and presses Enter. */
+	function sendPasted(e: SubmitEvent) {
+		e.preventDefault();
+		const text = pasted.trim();
+		if (!text || !loginTerm) return;
+		loginTerm.input(text);
+		setTimeout(() => loginTerm?.input('\r'), 50);
+		pasted = '';
+	}
 
 	// Closing the page mid-sign-in still cleans up the container.
 	onDestroy(() => {
@@ -550,21 +573,29 @@
 	description={login ? SIGN_IN[login.agent].help : ''}
 	width="max-w-4xl"
 >
-	<div class="h-[26rem] overflow-hidden rounded-xl border border-term-edge">
+	<div class="flex h-[26rem] flex-col overflow-hidden rounded-xl border border-term-edge max-sm:h-[20rem]">
+		<LinkBar links={loginLinks} code={loginCode} />
 		{#if login && loginReady}
-			<Terminal path="/ws/accounts/{login.id}/login" />
+			<div class="min-h-0 flex-1"><Terminal bind:this={loginTerm} path="/ws/accounts/{login.id}/login" /></div>
 		{:else}
 			<div class="grid h-full place-items-center text-xs text-[#9aa3b2]" style="background: var(--term-bg)">
 				<span class="flex items-center gap-2"><LoaderCircle class="size-4 animate-spin" />Starting the sign-in container…</span>
 			</div>
 		{/if}
 	</div>
-	<div class="mt-3 flex flex-wrap items-center gap-3">
+	<div class="mt-3 flex flex-wrap items-center gap-2">
 		{#if loginLink}
-			<a class="btn btn-secondary btn-sm" href={loginLink} target="_blank" rel="noopener"><ExternalLink />Open the sign-in page</a>
+			<a class="btn btn-primary btn-sm" href={loginLink} target="_blank" rel="noopener"><ExternalLink />Open the sign-in page</a>
 		{/if}
-		<p class="min-w-0 flex-1 text-xs text-muted-foreground">The login is saved in this account's folder on the server and shared by its sessions.</p>
+		{#if login?.agent !== 'codex'}
+			<!-- Claude and Gemini hand back a code to paste in; pasting into a terminal is fiddly on phones. -->
+			<form class="flex min-w-56 flex-1 gap-2" onsubmit={sendPasted}>
+				<input class="input h-8 font-mono text-xs" placeholder="Paste the code from the sign-in page" autocomplete="off" bind:value={pasted} disabled={!loginReady} />
+				<button class="btn btn-secondary btn-sm shrink-0" disabled={!pasted.trim()}><Send />Send</button>
+			</form>
+		{/if}
 	</div>
+	<p class="mt-2 text-xs text-muted-foreground">The login is saved in this account's folder on the server and shared by its sessions.</p>
 	{#snippet footer()}
 		<button class="btn btn-primary" disabled={finishing} onclick={finishLogin}>
 			{#if finishing}<LoaderCircle class="animate-spin" />{/if}Done

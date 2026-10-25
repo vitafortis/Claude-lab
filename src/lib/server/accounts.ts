@@ -13,6 +13,7 @@ import { agentSetup } from './providers.ts';
 import { getAccount, getAccountSecrets, getSettings, setAccountStatus } from './store.ts';
 import { ensureImage, LABELS, parseEnvLines, removeOwned } from './sessions/runtime.ts';
 import { abs, accountRel, backing, ensureDirs, mountSpec } from './sessions/storage.ts';
+import { extractLinks, findDeviceCode } from '#lib/pane.ts';
 import { ACCOUNT_KINDS } from '#lib/providers.ts';
 import type { ModelAccount } from '#lib/types.ts';
 
@@ -86,15 +87,19 @@ export function parseAuthStatus(output: string, exitCode: number): { status: Mod
 }
 
 // The sign-in links each agent prints: Claude's authorize URL, Codex's device page, Google's.
-const LOGIN_URL = /https:\/\/(?:\S*oauth\/authorize\S+|auth\.openai\.com\/codex\/device\S*|accounts\.google\.com\/o\/oauth2\S+)/g;
+const LOGIN_URL = /^https:\/\/(?:\S*oauth\/authorize|auth\.openai\.com\/|accounts\.google\.com\/o\/oauth2)/;
 
-/** The sign-in link the agent printed (read joined, since it wraps in the terminal). */
-export async function loginUrl(accountId: string): Promise<string | null> {
+/**
+ * What the sign-in terminal shows that's hard to copy on a phone: the sign-in link (wrapped
+ * lines joined), any other links, and a one-time code to type at the provider.
+ */
+export async function loginScreen(accountId: string): Promise<{ url: string | null; links: string[]; code: string | null }> {
 	const container = await loginContainer(accountId);
-	if (!container) return null;
+	if (!container) return { url: null, links: [], code: null };
 	const r = await exec(container, ['tmux', 'capture-pane', '-p', '-J', '-t', 'main', '-S', '-200'], { user: 'node' });
-	const urls = r.stdout.match(LOGIN_URL);
-	return urls ? urls[urls.length - 1] : null;
+	const lines = r.stdout.split('\n');
+	const links = extractLinks(lines);
+	return { url: links.findLast((l) => LOGIN_URL.test(l)) ?? null, links, code: findDeviceCode(lines) };
 }
 
 /** Runs a command with the account's credentials in a throwaway container. */

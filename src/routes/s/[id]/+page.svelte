@@ -33,6 +33,7 @@
 	import SessionTags from '#lib/components/SessionTags.svelte';
 	import StateDot from '#lib/components/StateDot.svelte';
 	import Switch from '#lib/components/Switch.svelte';
+	import LinkBar from '#lib/components/LinkBar.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
@@ -212,6 +213,8 @@
 		<!-- Terminal, or what to do when there isn't one -->
 		<div class="flex min-w-0 flex-1 flex-col">
 			{#if running && s.containerId}
+				<!-- The agent's screen only: the Shell tab is a separate terminal the probe doesn't read. -->
+				{#if mode === 'claude'}<LinkBar links={live?.links ?? []} />{/if}
 				<div class="min-h-0 flex-1">
 					{#key `${s.containerId}:${mode}`}
 						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" />

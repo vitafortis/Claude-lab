@@ -194,6 +194,8 @@ export interface SessionLive {
 	/** The last lines of the terminal, plain text. */
 	tail: string[];
 	rcUrl: string | null;
+	/** Links on screen (wrapped ones joined), newest last. */
+	links: string[];
 	summary: TranscriptSummary | null;
 	git: GitState | null;
 	/** An AI summary, if one was asked for. */

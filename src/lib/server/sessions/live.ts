@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { exec } from '../docker.ts';
 import { getSession, listSessions, setSessionRcUrl } from '../store.ts';
-import { findRcUrl, paneState, parseProbe } from '#lib/pane.ts';
+import { extractLinks, findRcUrl, paneState, parseProbe } from '#lib/pane.ts';
 import { checkPr } from './prs.ts';
 import { reconcile, runningContainer } from './runtime.ts';
 import { metaDir } from './storage.ts';
@@ -34,9 +34,9 @@ function readAiSummary(id: string): SessionLive['aiSummary'] {
 	}
 }
 
-async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 'state' | 'tail' | 'rcUrl' | 'git'>> {
+async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 'state' | 'tail' | 'rcUrl' | 'links' | 'git'>> {
 	if (s.status !== 'running' || !s.containerId) {
-		return { state: s.status === 'starting' ? 'starting' : 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, git: gitCache.get(s.id) ?? null };
+		return { state: s.status === 'starting' ? 'starting' : 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, links: [], git: gitCache.get(s.id) ?? null };
 	}
 	try {
 		const r = await exec(s.containerId, ['ccm-status', ...(withGit ? ['--git'] : [])], { user: 'node', timeoutMs: 8000 });
@@ -44,9 +44,9 @@ async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 's
 		if (p.git || withGit) gitCache.set(s.id, p.git);
 		const rcUrl = findRcUrl(p.lines) ?? s.rcUrl;
 		if (rcUrl !== s.rcUrl) setSessionRcUrl(s.id, rcUrl);
-		return { state: paneState(p.command, p.lines, s.agent), tail: p.lines.slice(-40), rcUrl, git: gitCache.get(s.id) ?? null };
+		return { state: paneState(p.command, p.lines, s.agent), tail: p.lines.slice(-40), rcUrl, links: extractLinks(p.lines), git: gitCache.get(s.id) ?? null };
 	} catch {
-		return { state: 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, git: gitCache.get(s.id) ?? null };
+		return { state: 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, links: live.get(s.id)?.links ?? [], git: gitCache.get(s.id) ?? null };
 	}
 }
 
