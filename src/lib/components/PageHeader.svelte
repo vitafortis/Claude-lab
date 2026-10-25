@@ -4,7 +4,6 @@
 </script>
 
 <div class="relative">
-	<div class="glow-top pointer-events-none absolute inset-x-0 -top-10 h-64"></div>
 	<header class="relative flex flex-wrap items-end justify-between gap-4 px-4 pt-6 pb-5 sm:px-8 sm:pt-8 sm:pb-6">
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{title}</h1>

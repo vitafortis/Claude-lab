@@ -138,7 +138,7 @@
 		<section class="card divide-y divide-border">
 			<div class="flex items-center justify-between gap-4 p-5">
 				<span>
-					<span class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><ShieldCheck class="size-4 text-primary" />Require sign-in</span>
+					<span class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><ShieldCheck class="size-4 text-muted-foreground" />Require sign-in</span>
 					<span class="mt-0.5 block text-xs text-muted-foreground">Off: anyone who can reach cc·modern uses it as the admin. Only for a reverse proxy that already signs people in.</span>
 				</span>
 				<Switch bind:checked={form.required} label="Require sign-in" />
@@ -233,7 +233,7 @@
 		<section class="card space-y-4 p-5 {form.required ? '' : 'opacity-60'}">
 			<div class="flex items-center justify-between gap-4">
 				<span>
-					<span class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><Network class="size-4 text-primary" />Reverse proxy sign-in</span>
+					<span class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><Network class="size-4 text-muted-foreground" />Reverse proxy sign-in</span>
 					<span class="mt-0.5 block text-xs text-muted-foreground">Forward auth: your proxy (Authelia, Authentik, oauth2-proxy, Tailscale…) signs people in and passes who they are in headers.</span>
 				</span>
 				<Switch bind:checked={form.proxy.enabled} label="Reverse proxy sign-in" />
@@ -308,11 +308,11 @@
 		</div>
 
 		<section>
-			<h2 class="mb-3 flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><Users class="size-4 text-primary" />Users</h2>
+			<h2 class="mb-3 flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><Users class="size-4 text-muted-foreground" />Users</h2>
 			<div class="card divide-y divide-border">
 				{#each data.users as u (u.id)}
 					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
-						<span class="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary uppercase">{(u.name ?? u.email).slice(0, 1)}</span>
+						<span class="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-semibold text-foreground uppercase">{(u.name ?? u.email).slice(0, 1)}</span>
 						<div class="min-w-0 flex-1 basis-52">
 							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
 								{u.name ?? u.email}{#if u.id === data.me}<span class="badge">You</span>{/if}<span class="badge">{SOURCE[u.source]}</span>

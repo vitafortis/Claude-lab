@@ -401,7 +401,7 @@
 			{#each skills as o (o.command)}
 				<button
 					type="button"
-					class="flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left {skillCommand === o.command ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}"
+					class="flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left {skillCommand === o.command ? 'border-foreground/50 bg-muted' : 'border-border hover:bg-accent/40'}"
 					onclick={() => (skillCommand = o.command)}
 				>
 					<span class="font-mono text-[0.8125rem] font-medium">{o.command}</span>

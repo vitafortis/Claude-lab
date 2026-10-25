@@ -39,7 +39,7 @@
 	}
 </script>
 
-<article class="card flex min-w-0 flex-col overflow-hidden transition-shadow hover:shadow-surface-lg {view === 'waiting' ? 'ring-1 ring-warning/40' : ''}">
+<article class="card flex min-w-0 flex-col overflow-hidden transition-colors hover:border-input {view === 'waiting' ? 'ring-1 ring-warning/40' : ''}">
 	<header class="flex items-start gap-3 px-4 pt-4">
 		<StateDot state={view} class="mt-1.5" />
 		<div class="min-w-0 flex-1">

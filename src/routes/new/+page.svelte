@@ -194,10 +194,10 @@
 			{#each [{ value: 'task', icon: ListChecks, title: 'Work on a task', body: 'Start the agent with a message, or at the prompt.' }, { value: 'skill', icon: Wand, title: 'Run a skill', body: 'Start with a skill or command, e.g. /code-review on a pull request.' }] as m (m.value)}
 				<button
 					type="button"
-					class="flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {mode === m.value ? 'border-primary/60 bg-primary-soft' : 'border-border bg-card hover:bg-accent/40'}"
+					class="flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {mode === m.value ? 'border-foreground/50 bg-muted' : 'border-border bg-card hover:bg-accent/40'}"
 					onclick={() => (mode = m.value as 'task' | 'skill')}
 				>
-					<m.icon class="mt-0.5 size-4 shrink-0 {mode === m.value ? 'text-primary' : 'text-muted-foreground'}" />
+					<m.icon class="mt-0.5 size-4 shrink-0 {mode === m.value ? 'text-foreground' : 'text-muted-foreground'}" />
 					<span>
 						<span class="block text-[0.8125rem] font-medium">{m.title}</span>
 						<span class="block text-xs text-muted-foreground">{m.body}</span>
@@ -303,7 +303,7 @@
 			</div>
 			{#if data.profiles.length}
 				<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border bg-surface px-4 py-2.5 text-[0.8125rem]">
-					<Layers class="size-4 shrink-0 text-primary" />
+					<Layers class="size-4 shrink-0 text-muted-foreground" />
 					<label for="profile" class="font-medium">Profile</label>
 					<select id="profile" class="input h-8 w-auto min-w-48 text-xs" bind:value={profileChoice}>
 						<option value="auto">Match the repo{matched ? `: ${matched.name}` : ''}</option>
@@ -327,7 +327,7 @@
 						{#each skills as o (o.command)}
 							<button
 								type="button"
-								class="flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors {command === o.command ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}"
+								class="flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors {command === o.command ? 'border-foreground/50 bg-muted' : 'border-border hover:bg-accent/40'}"
 								onclick={() => (command = o.command)}
 							>
 								<span class="min-w-0">
@@ -385,7 +385,7 @@
 				</div>
 			</div>
 			<div class="flex items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-				<Radio class="mt-0.5 size-4 shrink-0 text-primary" />
+				<Radio class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 				<div class="min-w-0 flex-1 text-[0.8125rem]">
 					<p class="font-medium">Remote Control</p>
 					<p class="text-xs text-muted-foreground">

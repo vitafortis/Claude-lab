@@ -428,8 +428,8 @@
 
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
 		{#if welcome}
-			<div class="card flex items-start gap-3 border-primary/30 p-4 text-[0.8125rem]">
-				<ShieldCheck class="mt-0.5 size-4 shrink-0 text-primary" />
+			<div class="card flex items-start gap-3 p-4 text-[0.8125rem]">
+				<ShieldCheck class="mt-0.5 size-4 shrink-0 text-success" />
 				<p>You're set up. Connect a model account below (and GitHub for private repos), then <a class="text-primary hover:underline" href="/new">start a session</a>.</p>
 			</div>
 		{/if}
