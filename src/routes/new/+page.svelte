@@ -6,6 +6,8 @@
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
+	import ModelPicker from '#lib/components/ModelPicker.svelte';
+	import { modelGroups } from '#lib/models.ts';
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
@@ -18,15 +20,6 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-
-	// Claude's aliases; Codex and Gemini take their vendors' model names as typed.
-	const MODELS = [
-		{ value: '', label: 'Default' },
-		{ value: 'opus', label: 'Opus' },
-		{ value: 'sonnet', label: 'Sonnet' },
-		{ value: 'haiku', label: 'Haiku' },
-		{ value: 'fable', label: 'Fable' }
-	];
 
 	// Form fields start from the loaded values (preferring a signed-in account) and are edited locally.
 	const initial = untrack(() => ({
@@ -95,7 +88,7 @@
 		lastAgent = a;
 		untrack(() => {
 			permissionMode = fitPermissionMode(a, permissionMode);
-			if (profile?.accountId !== accountId && (a !== 'claude' || !MODELS.some((m) => m.value === model))) model = '';
+			if (profile?.accountId !== accountId && (a !== 'claude' || !modelGroups('claude', null).some((g) => g.options.some((o) => o.value === model)))) model = '';
 		});
 	});
 
@@ -357,17 +350,10 @@
 					<textarea id="prompt" class="input h-auto min-h-24 py-2 leading-relaxed" rows="4" placeholder="What should {agentName} work on? Leave empty to start at the prompt." bind:value={prompt}></textarea>
 				</div>
 			{/if}
-			<div class="grid gap-4 sm:grid-cols-[12rem_1fr]">
+			<div class="grid gap-4 sm:grid-cols-[16rem_1fr]">
 				<div>
 					<label class="label" for="model">Model</label>
-					{#if agent === 'claude'}
-						<select id="model" class="input" bind:value={model}>
-							{#each MODELS as m (m.value)}<option value={m.value}>{m.label}</option>{/each}
-							{#if model && !MODELS.some((m) => m.value === model)}<option value={model}>{model}</option>{/if}
-						</select>
-					{:else}
-						<input id="model" class="input font-mono text-xs" placeholder="{AGENT_LABEL[agent]}'s default" bind:value={model} spellcheck="false" />
-					{/if}
+					<ModelPicker id="model" bind:value={model} {agent} kind={account?.kind} />
 				</div>
 				<div>
 					<span class="label">Permissions</span>

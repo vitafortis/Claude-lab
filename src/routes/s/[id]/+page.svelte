@@ -39,8 +39,10 @@
 	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { deleteSession, relaunchAgent, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
 	import QuestionBar from '#lib/components/QuestionBar.svelte';
+	import ModelPicker from '#lib/components/ModelPicker.svelte';
+	import { CLAUDE_ALIASES, modelLabel } from '#lib/models.ts';
 	import { findQuestion, type Question } from '#lib/pane.ts';
-	import { sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
+	import { confirmAction, sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
 	import { displayState } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
@@ -156,6 +158,28 @@
 		}
 	}
 
+	/** Saves the model and, while the agent runs, offers to restart it on the newest conversation. */
+	async function changeModel(value: string) {
+		const model = value || null;
+		if (model === (s.model ?? null)) return;
+		try {
+			upsertSession(await api.patch<Session>(`/api/sessions/${s.id}`, { model }));
+		} catch (err) {
+			toast('error', "Couldn't change the model", errorMessage(err));
+			return;
+		}
+		const label = model ? modelLabel(model) : 'the default model';
+		if (!running) return toast('success', `Model: ${label}`, 'Used from the next start.');
+		const midTurn = live?.state === 'working';
+		const ok = await confirmAction({
+			title: `Switch to ${label} now?`,
+			body: `${agentName} restarts and carries on with the newest conversation${midTurn ? '. It is in the middle of a turn, which stops' : ''}. Otherwise the model applies from the next start.`,
+			confirmLabel: 'Restart now'
+		});
+		if (ok) await launch({ mode: 'continue' });
+		else toast('success', `Model: ${label}`, 'Used from the next start.');
+	}
+
 	// Keys for touch screens, as terminal input sequences.
 	const KEYS: { label: string; seq: string; title: string }[] = [
 		{ label: 'Esc', seq: '\x1b', title: 'Escape: interrupt the agent or close a menu' },
@@ -201,6 +225,17 @@
 				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'claude' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'claude')}><TerminalSquare class="size-3.5" /><span class="max-sm:hidden">{agentName}</span></button>
 				<button class="flex items-center gap-1.5 rounded-md px-2.5 py-1 {mode === 'shell' ? 'bg-accent font-medium text-foreground' : 'text-muted-foreground'}" onclick={() => (mode = 'shell')}><SquareTerminal class="size-3.5" /><span class="max-sm:hidden">Shell</span></button>
 			</div>
+		{/if}
+		{#if isClaude}
+			<!-- Quick model switch: a native select, so phones get their own picker. -->
+			<label class="relative flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground" title="Model: {modelLabel(s.model)}. Change it here">
+				<Sparkles class="size-3.5" /><span class="max-w-28 truncate">{s.model ? modelLabel(s.model).replace(' (pinned)', '') : 'Default model'}</span><ChevronDown class="size-3" />
+				<select class="absolute inset-0 cursor-pointer opacity-0" aria-label="Model" value={s.model ?? ''} onchange={(e) => changeModel(e.currentTarget.value)}>
+					<option value="">Default model</option>
+					{#each CLAUDE_ALIASES as m (m.value)}<option value={m.value}>{m.label} · {m.hint}</option>{/each}
+					{#if s.model && !CLAUDE_ALIASES.some((m) => m.value === s.model)}<option value={s.model}>{modelLabel(s.model)}</option>{/if}
+				</select>
+			</label>
 		{/if}
 		{#if running}
 			<span class="flex items-center gap-1.5 rounded-full border border-border px-2 py-1 text-xs text-muted-foreground" title="The terminal's connection to the container: {CONN[conn].label}" aria-live="polite">
@@ -366,7 +401,7 @@
 					<div class="grid grid-cols-2 gap-2">
 						<div>
 							<label class="label" for="model">Model</label>
-							<input id="model" class="input h-8 text-xs" placeholder="Default" value={s.model ?? ''} onchange={(e) => patch({ model: e.currentTarget.value || null })} />
+							<ModelPicker id="model" class="h-8 text-xs" value={s.model ?? ''} agent={s.agent} kind={account?.kind} onchange={changeModel} />
 						</div>
 						<div>
 							<label class="label" for="perm">Permissions</label>

@@ -25,6 +25,8 @@
 	} from '@lucide/svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
 	import GettingStarted from '#lib/components/GettingStarted.svelte';
+	import ModelPicker from '#lib/components/ModelPicker.svelte';
+	import { modelLabel } from '#lib/models.ts';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import LinkBar from '#lib/components/LinkBar.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
@@ -517,7 +519,7 @@
 									{#if acct}<AgentBadge agent={acct.agent} />{/if}
 								</p>
 								<p class="truncate text-xs text-muted-foreground">
-									{acct?.name ?? 'Missing account'} · {p.model ?? 'default model'} · {PERMISSION_MODES.find((m) => m.value === p.permissionMode)?.label}
+									{acct?.name ?? 'Missing account'} · {p.model ? modelLabel(p.model) : 'default model'} · {PERMISSION_MODES.find((m) => m.value === p.permissionMode)?.label}
 								</p>
 								<p class="mt-1 flex flex-wrap gap-1">
 									{#each p.repos as r (r)}<span class="badge font-mono">{r}</span>{:else}<span class="text-xs text-muted-foreground">No repos: only used when picked</span>{/each}
@@ -731,10 +733,7 @@
 		<div class="grid grid-cols-2 gap-3">
 			<div>
 				<label class="label" for="pmodel">Model</label>
-				<input id="pmodel" class="input font-mono text-xs" list="pmodels" placeholder="Default" bind:value={pf.model} />
-				<datalist id="pmodels">
-					{#each ACCOUNT_KINDS[accountById.get(pf.accountId)?.kind ?? 'subscription'].models as m (m)}<option value={m}></option>{/each}
-				</datalist>
+				<ModelPicker id="pmodel" bind:value={pf.model} agent={pfAgent} kind={accountById.get(pf.accountId)?.kind} />
 			</div>
 			<div>
 				<label class="label" for="pperm">Permissions</label>

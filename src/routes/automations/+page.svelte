@@ -20,6 +20,7 @@
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
+	import { modelLabel } from '#lib/models.ts';
 	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
 	import { parseRepo } from '#lib/launch.ts';
 	import { matchProfile } from '#lib/profiles.ts';
@@ -111,7 +112,7 @@
 	function ruleSummary(rule: LinearRule): string {
 		const profile = rule.profileId && rule.profileId !== 'auto' ? data.profiles.find((p) => p.id === rule.profileId) : null;
 		if (profile) return `Profile ${profile.name}`;
-		const own = `${accountName(rule.accountId)} · ${PERMISSION_MODES.find((m) => m.value === rule.permissionMode)?.label} permissions${rule.model ? ` · ${rule.model}` : ''}`;
+		const own = `${accountName(rule.accountId)} · ${PERMISSION_MODES.find((m) => m.value === rule.permissionMode)?.label} permissions${rule.model ? ` · ${modelLabel(rule.model)}` : ''}`;
 		return rule.profileId === 'auto' ? `The repo's profile, else ${own}` : `As ${own}`;
 	}
 

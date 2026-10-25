@@ -6,6 +6,7 @@
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import SettingsTabs from '#lib/components/SettingsTabs.svelte';
 	import Switch from '#lib/components/Switch.svelte';
+	import ModelPicker from '#lib/components/ModelPicker.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago } from '#lib/client/format.ts';
 	import { toast } from '#lib/client/state.svelte.ts';
@@ -157,7 +158,7 @@
 				</div>
 				<div>
 					<label class="label" for="dm">Default model</label>
-					<input id="dm" class="input" placeholder="Claude Code's default" bind:value={form.defaultModel} />
+					<ModelPicker id="dm" bind:value={form.defaultModel} agent="claude" />
 				</div>
 				<div>
 					<label class="label" for="dp">Default permissions</label>

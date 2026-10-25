@@ -29,8 +29,6 @@ export type KindSpec = {
 	/** Signs in from a terminal in the browser instead of with a pasted secret. */
 	signIn?: boolean;
 	remoteControl?: boolean;
-	/** Suggestions for the model field. Empty: free text, the agent's own default when blank. */
-	models: string[];
 };
 
 export const AGENT_LABEL: Record<Agent, string> = { claude: 'Claude Code', codex: 'Codex CLI', gemini: 'Gemini CLI' };
@@ -42,8 +40,6 @@ const PINS: FieldSpec[] = [
 	{ key: 'haikuModel', label: 'Haiku model ID', placeholder: 'Provider default', help: 'Also used for background tasks such as session titles' }
 ];
 
-const CLAUDE_MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
-
 export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 	subscription: {
 		agent: 'claude',
@@ -52,24 +48,21 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 		description: 'Sign in with your Pro or Max plan in a terminal here. Supports Remote Control.',
 		fields: [],
 		signIn: true,
-		remoteControl: true,
-		models: CLAUDE_MODELS
+		remoteControl: true
 	},
 	token: {
 		agent: 'claude',
 		label: 'Long-lived token',
 		group: 'Anthropic',
 		description: 'A token from `claude setup-token`, billed to your plan. No Remote Control.',
-		fields: [{ key: 'token', label: 'Token', secret: true, required: true, placeholder: 'sk-ant-oat01-…' }],
-		models: CLAUDE_MODELS
+		fields: [{ key: 'token', label: 'Token', secret: true, required: true, placeholder: 'sk-ant-oat01-…' }]
 	},
 	api_key: {
 		agent: 'claude',
 		label: 'Anthropic API key',
 		group: 'Anthropic',
 		description: 'A Claude Console key, billed per use.',
-		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true, placeholder: 'sk-ant-api03-…' }],
-		models: CLAUDE_MODELS
+		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true, placeholder: 'sk-ant-api03-…' }]
 	},
 	bedrock: {
 		agent: 'claude',
@@ -82,8 +75,7 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 			{ key: 'accessKeyId', label: 'Access key ID', placeholder: 'AKIA…' },
 			{ key: 'secretAccessKey', label: 'Secret access key', secret: true },
 			...PINS
-		],
-		models: CLAUDE_MODELS
+		]
 	},
 	vertex: {
 		agent: 'claude',
@@ -95,8 +87,7 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 			{ key: 'region', label: 'Region', required: true, default: 'global', placeholder: 'global, us-east5…' },
 			{ key: 'serviceAccount', label: 'Service account key (JSON)', secret: true, required: true, multiline: true },
 			...PINS
-		],
-		models: CLAUDE_MODELS
+		]
 	},
 	foundry: {
 		agent: 'claude',
@@ -107,8 +98,7 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 			{ key: 'resource', label: 'Resource name', required: true, placeholder: 'my-resource' },
 			{ key: 'apiKey', label: 'API key', secret: true, required: true },
 			...PINS
-		],
-		models: CLAUDE_MODELS
+		]
 	},
 	gateway: {
 		agent: 'claude',
@@ -128,8 +118,7 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 				]
 			},
 			...PINS
-		],
-		models: CLAUDE_MODELS
+		]
 	},
 	chatgpt: {
 		agent: 'codex',
@@ -137,16 +126,14 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 		group: 'OpenAI',
 		description: 'Codex CLI with your ChatGPT Plus, Pro or Business plan. Sign in with a device code here.',
 		fields: [],
-		signIn: true,
-		models: []
+		signIn: true
 	},
 	openai_api_key: {
 		agent: 'codex',
 		label: 'OpenAI API key (Codex)',
 		group: 'OpenAI',
 		description: 'Codex CLI billed per use to your OpenAI API account.',
-		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true, placeholder: 'sk-…' }],
-		models: []
+		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true, placeholder: 'sk-…' }]
 	},
 	google: {
 		agent: 'gemini',
@@ -154,16 +141,14 @@ export const ACCOUNT_KINDS: Record<AccountKind, KindSpec> = {
 		group: 'Google',
 		description: 'Gemini CLI with your Google account. Sign in from a terminal here.',
 		fields: [],
-		signIn: true,
-		models: []
+		signIn: true
 	},
 	gemini_api_key: {
 		agent: 'gemini',
 		label: 'Gemini API key',
 		group: 'Google',
 		description: 'Gemini CLI with a key from Google AI Studio.',
-		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true }],
-		models: []
+		fields: [{ key: 'apiKey', label: 'API key', secret: true, required: true }]
 	}
 };
 
