@@ -115,8 +115,84 @@
 				return true;
 			});
 
-			send = (data: string) => {
+			const raw = (data: string) => {
 				if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d: data }));
+			};
+
+			// Scrolling, one line per row of wheel or finger travel. Under tmux (which asks for the
+			// mouse) the history isn't in xterm: the wheel becomes wheel reports, one per line, for
+			// tmux's history view (bindings in upgrade.ts) or for the program in it (Claude Code
+			// scrolls its own transcript a line per report). A plain shell scrolls xterm's buffer.
+			const tmux = () => term.modes.mouseTrackingMode !== 'none';
+			const cellHeight = () => host.clientHeight / term.rows || 16;
+			let inHistory = false;
+			let rest = 0;
+			const scrollBy = (px: number) => {
+				rest += px;
+				const lines = Math.trunc(rest / cellHeight());
+				if (!lines) return;
+				rest -= lines * cellHeight();
+				if (tmux()) {
+					if (lines < 0) inHistory = true;
+					raw(`\x1b[<${lines < 0 ? 64 : 65};1;1M`.repeat(Math.min(Math.abs(lines), 200)));
+				} else term.scrollLines(lines);
+			};
+			term.attachCustomWheelEventHandler((e) => {
+				// Without tmux, xterm's own scrolling (or its arrow keys for full-screen programs).
+				if (!tmux()) return true;
+				scrollBy(e.deltaMode === 1 ? e.deltaY * cellHeight() : e.deltaMode === 2 ? e.deltaY * host.clientHeight : e.deltaY);
+				e.preventDefault();
+				return false;
+			});
+
+			// One finger drags the history, and a flick keeps it going for a moment.
+			let touchY: number | null = null;
+			let touchAt = 0;
+			let speed = 0;
+			let glide = 0;
+			const onTouchStart = (e: TouchEvent) => {
+				cancelAnimationFrame(glide);
+				touchY = e.touches.length === 1 ? e.touches[0].clientY : null;
+				touchAt = e.timeStamp;
+				speed = 0;
+			};
+			const onTouchMove = (e: TouchEvent) => {
+				if (touchY === null || e.touches.length !== 1) return;
+				const y = e.touches[0].clientY;
+				const dy = touchY - y;
+				touchY = y;
+				speed = dy / Math.max(1, e.timeStamp - touchAt);
+				touchAt = e.timeStamp;
+				scrollBy(dy);
+				e.preventDefault();
+				e.stopPropagation();
+			};
+			const onTouchEnd = () => {
+				if (touchY === null) return;
+				touchY = null;
+				let v = speed * 16;
+				const step = () => {
+					v *= 0.95;
+					if (Math.abs(v) < 0.5) return;
+					scrollBy(v);
+					glide = requestAnimationFrame(step);
+				};
+				step();
+			};
+			host.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+			host.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+			host.addEventListener('touchend', onTouchEnd, { passive: true, capture: true });
+			host.addEventListener('touchcancel', onTouchEnd, { passive: true, capture: true });
+
+			// Keys typed while scrolled back go to the agent, not to tmux's history view: leave
+			// it first (Meta+wheel-down, bound to cancel). Mouse reports (clicks) don't count.
+			send = (data: string) => {
+				if (inHistory && !data.startsWith('\x1b[<') && !data.startsWith('\x1b[M')) {
+					inHistory = false;
+					rest = 0;
+					raw('\x1b[<73;1;1M');
+				}
+				raw(data);
 			};
 			term.onData((d) => send(d));
 			term.onBinary((d) => send(d));
@@ -196,6 +272,11 @@
 				document.removeEventListener('visibilitychange', wake);
 				window.removeEventListener('online', wake);
 				window.removeEventListener('pageshow', wake);
+				cancelAnimationFrame(glide);
+				host.removeEventListener('touchstart', onTouchStart, true);
+				host.removeEventListener('touchmove', onTouchMove, true);
+				host.removeEventListener('touchend', onTouchEnd, true);
+				host.removeEventListener('touchcancel', onTouchEnd, true);
 				ro.disconnect();
 				ws?.close();
 				term.dispose();

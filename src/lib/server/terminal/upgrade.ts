@@ -44,18 +44,36 @@ const clamp = (v: string | null, lo: number, hi: number, d: number) => {
 
 type Target = { container: string; cmd: string[]; workdir?: string };
 
+/**
+ * Attaches to the agent's tmux, first binding the wheel in tmux's history view to one line
+ * per report (the browser sends one per line it scrolls; tmux's default is five) and
+ * Meta+wheel-down to leaving it, which the browser sends before keys typed while scrolled
+ * back. Set here rather than in tmux.conf so sessions on an older image get them too.
+ */
+const ATTACH = [
+	'tmux',
+	...['copy-mode', 'copy-mode-vi'].flatMap((t) => [
+		...['bind', '-T', t, 'WheelUpPane', 'send', '-X', '-N', '1', 'scroll-up', ';'],
+		...['bind', '-T', t, 'WheelDownPane', 'send', '-X', '-N', '1', 'scroll-down', ';'],
+		...['bind', '-T', t, 'M-WheelDownPane', 'send', '-X', 'cancel', ';']
+	]),
+	'attach-session',
+	'-t',
+	'main'
+];
+
 async function resolveTarget(path: string, params: URLSearchParams): Promise<Target> {
 	let m = /^\/ws\/sessions\/([0-9a-f-]{36})\/terminal$/.exec(path);
 	if (m) {
 		const { session, container } = await runningContainer(m[1]);
 		const shell = params.get('mode') === 'shell';
-		return { container, workdir: workdir(session), cmd: shell ? ['bash', '-l'] : ['tmux', 'attach-session', '-t', 'main'] };
+		return { container, workdir: workdir(session), cmd: shell ? ['bash', '-l'] : ATTACH };
 	}
 	m = /^\/ws\/accounts\/([0-9a-f-]{36})\/login$/.exec(path);
 	if (m) {
 		const container = await loginContainer(m[1]);
 		if (!container) throw new Error('The sign-in container is not running');
-		return { container, cmd: ['tmux', 'attach-session', '-t', 'main'] };
+		return { container, cmd: ATTACH };
 	}
 	throw new Error('Not found');
 }

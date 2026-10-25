@@ -150,6 +150,7 @@
 		{ label: '↑', seq: '\x1b[A', title: 'Up' },
 		{ label: '↓', seq: '\x1b[B', title: 'Down' },
 		{ label: '^C', seq: '\x03', title: 'Ctrl+C' },
+		{ label: 'End', seq: '\x1b[1;5F', title: 'Ctrl+End: back to the newest output' },
 		{ label: '⏎', seq: '\r', title: 'Enter' }
 	];
 
