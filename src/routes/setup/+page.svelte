@@ -7,7 +7,7 @@
 		try {
 			await api.post('/api/auth/setup', { email, password });
 			await invalidateAll();
-			goto('/accounts?welcome=1');
+			goto('/');
 		} catch (err) {
 			return errorMessage(err);
 		}

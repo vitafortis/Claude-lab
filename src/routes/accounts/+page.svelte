@@ -21,17 +21,17 @@
 		Plus,
 		Send,
 		RefreshCw,
-		ShieldCheck,
 		Trash2
 	} from '@lucide/svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
+	import GettingStarted from '#lib/components/GettingStarted.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import LinkBar from '#lib/components/LinkBar.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
-	import { confirmAction, toast } from '#lib/client/state.svelte.ts';
+	import { confirmAction, sessions, toast } from '#lib/client/state.svelte.ts';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import { matchProfile } from '#lib/profiles.ts';
@@ -41,7 +41,6 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
-	const welcome = $derived(page.url.searchParams.has('welcome'));
 
 	// ── Model accounts ──────────────────────────────────────────────────
 
@@ -233,6 +232,15 @@
 		const a = id && data.signingIn.includes(id) ? data.accounts.find((x) => x.id === id) : null;
 		if (a) void startLogin(a);
 		else if (id) markSignIn(null);
+		// Links from the getting-started guide (?add=model, ?add=github) open their dialog.
+		const add = page.url.searchParams.get('add');
+		if (add) {
+			const url = new URL(location.href);
+			url.searchParams.delete('add');
+			history.replaceState(history.state, '', url);
+			if (add === 'model') openAdd();
+			else if (add === 'github') openToken(null);
+		}
 	});
 
 	async function check(a: ModelAccount) {
@@ -442,11 +450,8 @@
 	<PageHeader title="Accounts" description="The models sessions run on, which repos use which, and how sessions reach GitHub." />
 
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
-		{#if welcome}
-			<div class="card flex items-start gap-3 border-primary/30 p-4 text-[0.8125rem]">
-				<ShieldCheck class="mt-0.5 size-4 shrink-0 text-primary" />
-				<p>You're set up. Connect a model account below (and GitHub for private repos), then <a class="text-primary hover:underline" href="/new">start a session</a>.</p>
-			</div>
+		{#if !sessions.list.length}
+			<GettingStarted compact accounts={data.accounts} signingIn={data.signingIn} githubAccounts={data.githubAccounts.length} onaddmodel={openAdd} onaddgithub={() => openToken(null)} />
 		{/if}
 
 		<section>
@@ -455,7 +460,7 @@
 					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Models</h2>
 					<p class="text-xs text-muted-foreground">Claude through Anthropic or your cloud, OpenAI through Codex CLI, Gemini through Gemini CLI. Sessions of one account share its sign-in and settings.</p>
 				</div>
-				<button class="btn btn-secondary btn-sm" onclick={openAdd}><Plus />Add account</button>
+				<button class="btn {data.accounts.length ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick={openAdd}><Plus />Add account</button>
 			</div>
 			<div class="card divide-y divide-border">
 				{#each data.accounts as a (a.id)}
@@ -488,53 +493,56 @@
 			</div>
 		</section>
 
-		<section id="profiles">
-			<div class="mb-3 flex items-end justify-between gap-3">
-				<div>
-					<h2 class="text-[0.9375rem] font-semibold tracking-tight">Profiles</h2>
-					<p class="text-xs text-muted-foreground">Which repos go to which model. New sessions and Linear rules pick the first profile matching the repo.</p>
+		<!-- Profiles route repos to accounts: nothing to say until there's an account. -->
+		{#if data.accounts.length}
+			<section id="profiles">
+				<div class="mb-3 flex items-end justify-between gap-3">
+					<div>
+						<h2 class="text-[0.9375rem] font-semibold tracking-tight">Profiles</h2>
+						<p class="text-xs text-muted-foreground">Which repos go to which model. New sessions and Linear rules pick the first profile matching the repo.</p>
+					</div>
+					<button class="btn btn-secondary btn-sm" disabled={!data.accounts.length} onclick={() => openProfile()}><Plus />Add profile</button>
 				</div>
-				<button class="btn btn-secondary btn-sm" disabled={!data.accounts.length} onclick={() => openProfile()}><Plus />Add profile</button>
-			</div>
-			<div class="card divide-y divide-border">
-				{#each data.profiles as p, i (p.id)}
-					{@const acct = accountById.get(p.accountId)}
-					<div class="flex flex-wrap items-center gap-3 px-4 py-3">
-						<div class="flex flex-col">
-							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match earlier" disabled={i === 0} onclick={() => moveProfile(i, -1)}><ChevronUp /></button>
-							<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match later" disabled={i === data.profiles.length - 1} onclick={() => moveProfile(i, 1)}><ChevronDown /></button>
+				<div class="card divide-y divide-border">
+					{#each data.profiles as p, i (p.id)}
+						{@const acct = accountById.get(p.accountId)}
+						<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+							<div class="flex flex-col">
+								<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match earlier" disabled={i === 0} onclick={() => moveProfile(i, -1)}><ChevronUp /></button>
+								<button class="btn btn-ghost btn-icon h-4 w-6 disabled:opacity-20" title="Match later" disabled={i === data.profiles.length - 1} onclick={() => moveProfile(i, 1)}><ChevronDown /></button>
+							</div>
+							<div class="min-w-0 flex-1 basis-52">
+								<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
+									{p.name}
+									{#if acct}<AgentBadge agent={acct.agent} />{/if}
+								</p>
+								<p class="truncate text-xs text-muted-foreground">
+									{acct?.name ?? 'Missing account'} · {p.model ?? 'default model'} · {PERMISSION_MODES.find((m) => m.value === p.permissionMode)?.label}
+								</p>
+								<p class="mt-1 flex flex-wrap gap-1">
+									{#each p.repos as r (r)}<span class="badge font-mono">{r}</span>{:else}<span class="text-xs text-muted-foreground">No repos: only used when picked</span>{/each}
+								</p>
+							</div>
+							<div class="ml-auto flex items-center gap-1">
+								<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openProfile(p)}><Pencil /></button>
+								<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeProfile(p)}><Trash2 /></button>
+							</div>
 						</div>
-						<div class="min-w-0 flex-1 basis-52">
-							<p class="flex flex-wrap items-center gap-2 text-[0.8125rem] font-medium">
-								{p.name}
-								{#if acct}<AgentBadge agent={acct.agent} />{/if}
-							</p>
-							<p class="truncate text-xs text-muted-foreground">
-								{acct?.name ?? 'Missing account'} · {p.model ?? 'default model'} · {PERMISSION_MODES.find((m) => m.value === p.permissionMode)?.label}
-							</p>
-							<p class="mt-1 flex flex-wrap gap-1">
-								{#each p.repos as r (r)}<span class="badge font-mono">{r}</span>{:else}<span class="text-xs text-muted-foreground">No repos: only used when picked</span>{/each}
-							</p>
+					{:else}
+						<p class="flex items-center justify-center gap-2 px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
+							<Layers class="size-4" />No profiles. Every session uses the account you pick for it.
+						</p>
+					{/each}
+					{#if data.profiles.length}
+						<div class="flex flex-wrap items-center gap-2 bg-surface px-4 py-2.5 text-xs">
+							<label for="try" class="text-muted-foreground">Try a repo</label>
+							<input id="try" class="input h-7 max-w-56 font-mono text-xs" placeholder="owner/name" bind:value={tryRepo} />
+							{#if tried !== undefined}<span class="text-muted-foreground">→ {#if tried}<b class="font-medium text-foreground">{tried.name}</b>{:else}no profile: picked by hand{/if}</span>{/if}
 						</div>
-						<div class="ml-auto flex items-center gap-1">
-							<button class="btn btn-ghost btn-icon btn-sm" title="Edit" onclick={() => openProfile(p)}><Pencil /></button>
-							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Delete" onclick={() => removeProfile(p)}><Trash2 /></button>
-						</div>
-					</div>
-				{:else}
-					<p class="flex items-center justify-center gap-2 px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
-						<Layers class="size-4" />No profiles. Every session uses the account you pick for it.
-					</p>
-				{/each}
-				{#if data.profiles.length}
-					<div class="flex flex-wrap items-center gap-2 bg-surface px-4 py-2.5 text-xs">
-						<label for="try" class="text-muted-foreground">Try a repo</label>
-						<input id="try" class="input h-7 max-w-56 font-mono text-xs" placeholder="owner/name" bind:value={tryRepo} />
-						{#if tried !== undefined}<span class="text-muted-foreground">→ {#if tried}<b class="font-medium text-foreground">{tried.name}</b>{:else}no profile: picked by hand{/if}</span>{/if}
-					</div>
-				{/if}
-			</div>
-		</section>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
 		<section id="github">
 			<div class="mb-3 flex flex-wrap items-end justify-between gap-3">

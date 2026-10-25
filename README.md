@@ -81,7 +81,7 @@ curl -fsSLO https://raw.githubusercontent.com/vitafortis/Claude-lab/main/compose
 docker compose up -d
 ```
 
-Open `http://<your-host>:3050` and create the local admin account. Everything else is set up in the UI; no environment variables are needed. Then:
+Open `http://<your-host>:3050` and create the local admin account. Everything else is set up in the UI; no environment variables are needed. The Sessions page then walks you through these three steps, with a button for each:
 
 1. **Accounts → Models → Add account.** Pick *Claude subscription* and sign in in the terminal that opens: open the link, approve, paste the code back. (Or a token, an API key, a cloud provider, OpenAI or Google.)
 2. **Accounts → GitHub → Add a token**, for private repos and pushing. Public repos work without one.

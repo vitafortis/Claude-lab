@@ -212,7 +212,7 @@
 				<div class="text-[0.8125rem]">
 					<p class="font-medium">Connect a model account first</p>
 					<p class="mt-0.5 text-muted-foreground">Sessions run as one of your accounts: a Claude login or key, Claude on your cloud, OpenAI or Google.</p>
-					<a href="/accounts" class="btn btn-secondary btn-sm mt-3">Go to Accounts</a>
+					<a href="/accounts?add=model" class="btn btn-primary btn-sm mt-3">Add a model account</a>
 				</div>
 			</div>
 		{/if}
