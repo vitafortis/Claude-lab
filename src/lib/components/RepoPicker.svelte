@@ -63,15 +63,21 @@
 		const ctrl = new AbortController();
 		const t = setTimeout(async () => {
 			searching = true;
-			const full = /^[\w.-]+\/[\w.-]+$/.test(q);
+			const slash = /^([\w-]+)\/([\w.-]*)$/.exec(q);
+			const base = `/api/github-accounts/${id}/repos`;
 			try {
-				if (full && !repos.some((r) => r.fullName.toLowerCase() === q.toLowerCase())) {
-					found = [await api.get<GithubRepo>(`/api/github-accounts/${id}/repos?repo=${encodeURIComponent(q)}`, ctrl.signal)];
-				} else if (!full) {
-					found = await api.get<GithubRepo[]>(`/api/github-accounts/${id}/repos?search=${encodeURIComponent(q)}`, ctrl.signal);
+				if (slash) {
+					// "owner/…": that owner's own list (private repos included), then the exact repo.
+					const [, who, name] = slash;
+					const theirs = await api.get<GithubRepo[]>(`${base}?owner=${encodeURIComponent(who)}`, ctrl.signal).catch(() => [] as GithubRepo[]);
+					found = theirs.filter((r) => r.name.toLowerCase().includes(name.toLowerCase()));
+					const exact = [...repos, ...theirs].some((r) => r.fullName.toLowerCase() === q.toLowerCase());
+					if (name && !exact) found = [...found, await api.get<GithubRepo>(`${base}?repo=${encodeURIComponent(q)}`, ctrl.signal)];
+				} else {
+					found = await api.get<GithubRepo[]>(`${base}?search=${encodeURIComponent(q)}`, ctrl.signal);
 				}
 			} catch (err) {
-				if (!ctrl.signal.aborted && full) lookupError = errorMessage(err);
+				if (!ctrl.signal.aborted && slash?.[2]) lookupError = errorMessage(err);
 			}
 			if (!ctrl.signal.aborted) searching = false;
 		}, 400);
@@ -117,7 +123,7 @@
 		<Search class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
 		<input
 			class="input pl-9 font-mono text-[0.8125rem]"
-			placeholder={account ? `Search ${account.label ?? account.login}'s repositories, or paste a URL` : 'owner/name or https://… git URL'}
+			placeholder={account ? `Search ${account.label ?? account.login}'s repositories, type owner/ to list an org's, or paste a URL` : 'owner/name or https://… git URL'}
 			bind:value
 			autocomplete="off"
 			spellcheck="false"
@@ -141,7 +147,8 @@
 					{#if o !== account.login}<Building2 />{/if}{o}
 				</button>
 			{/each}
-			<button type="button" class="ml-auto text-muted-foreground hover:text-foreground" title="Reload the list" onclick={() => load(true)}><RefreshCw class="size-3.5" /></button>
+			<span class="ml-auto text-[0.6875rem] text-muted-foreground" title="What GitHub returns for this token">{repos.length} repos · {repos.filter((r) => r.private).length} private</span>
+			<button type="button" class="text-muted-foreground hover:text-foreground" title="Reload the list" onclick={() => load(true)}><RefreshCw class="size-3.5" /></button>
 		</div>
 	{/if}
 	{#if error}<p class="mt-1.5 text-xs text-danger">{error}</p>{/if}

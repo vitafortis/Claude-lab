@@ -82,6 +82,7 @@ test('searchRepos asks GitHub by name among the known owners; the list flags SSO
 	let asked = '';
 	const restore = fakeGithub((url) => {
 		if (url.pathname === '/user/repos') return Response.json([repoJson('octo/one')], { headers: { 'x-github-sso': 'partial-results; organizations=1' } });
+		if (url.pathname.startsWith('/orgs/')) return Response.json([]);
 		asked = url.searchParams.get('q') ?? '';
 		return Response.json({ items: [repoJson('Acme/tier-service')] });
 	});
@@ -90,5 +91,21 @@ test('searchRepos asks GitHub by name among the known owners; the list flags SSO
 	const found = await github.searchRepos(a, 'tier');
 	assert.equal(found[0].fullName, 'Acme/tier-service');
 	assert.match(asked, /^tier in:name user:octo user:Acme/);
+	restore();
+});
+
+test("listRepos adds each organization's own list, where a token's private org repos show up", async () => {
+	const a = store.upsertGithubAccount(input('github_pat_org'), { label: 'Org token' });
+	const restore = fakeGithub((url) => {
+		// The user's list has only Acme's public repo; Acme's own list has the private one too.
+		if (url.pathname === '/user/repos') return Response.json([{ ...repoJson('Acme/site'), private: false }]);
+		if (url.pathname === '/orgs/Acme/repos') return Response.json([{ ...repoJson('Acme/site'), private: false }, repoJson('Acme/tier')]);
+		if (url.pathname === '/orgs/Hidden/repos') return Response.json([repoJson('Hidden/one'), repoJson('Hidden/two')]);
+		return new Response('{"message":"Not Found"}', { status: 404 });
+	});
+	const list = await github.listRepos(a, true);
+	assert.deepEqual(list.repos.map((r) => r.fullName).sort(), ['Acme/site', 'Acme/tier']);
+	// An org nothing points to is listed when asked for by name ("Hidden/" in the picker).
+	assert.equal((await github.ownerRepos(a, 'Hidden')).length, 2);
 	restore();
 });

@@ -112,20 +112,53 @@ export type RepoList = { repos: GithubRepo[]; notice: string | null };
 const SSO_NOTICE =
 	'Some of your organizations use single sign-on and leave their repos out until this token is authorized for them: on GitHub, Settings → Developer settings → Personal access tokens → Configure SSO.';
 
-/** Every repo the token can see (own, collaborator, org member), most recently pushed first. */
+/** An owner's repos as the token sees them, private ones included; an org first, else a user. */
+export async function ownerRepos(account: GithubAccount, owner: string): Promise<GithubRepo[]> {
+	if (!/^[A-Za-z0-9-]+$/.test(owner)) throw new BadRequest('Invalid owner');
+	const token = getGithubToken(account.id);
+	const repos: GithubRepo[] = [];
+	const base = owner.toLowerCase() === account.login.toLowerCase() ? null : `/orgs/${owner}/repos?type=all&sort=pushed`;
+	if (!base) return (await listRepos(account)).repos.filter((r) => r.owner.toLowerCase() === owner.toLowerCase());
+	for (let page = 1; page <= 10; page++) {
+		const res = await ghFetch(token, `${base}&per_page=100&page=${page}`);
+		if (res.status === 404) return (await gh<GhRepo[]>(token, `/users/${owner}/repos?type=all&sort=pushed&per_page=100`)).data.map(toRepo);
+		if (!res.ok) throw new BadRequest(`GitHub: ${((await res.json().catch(() => ({}))) as { message?: string }).message ?? res.statusText}`);
+		const data = (await res.json()) as GhRepo[];
+		repos.push(...data.map(toRepo));
+		if (data.length < 100) break;
+	}
+	return repos;
+}
+
+/**
+ * Every repo the token can see, most recently pushed first: the user's list, plus each
+ * organization's own list. A token owned by an organization (a fine-grained one) doesn't
+ * always bring that organization's private repos into the user's list.
+ */
 export async function listRepos(account: GithubAccount, refresh = false): Promise<RepoList> {
 	const hit = repoCache.get(account.id);
 	if (!refresh && hit && Date.now() - hit.at < 2 * 60_000) return hit.list;
 	const token = getGithubToken(account.id);
 	if (!token) return { repos: [], notice: null };
-	const repos: GithubRepo[] = [];
+	const byName = new Map<string, GithubRepo>();
 	let notice: string | null = null;
 	for (let page = 1; page <= 10; page++) {
 		const { data, headers } = await gh<GhRepo[]>(token, `/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`);
 		if (headers.get('x-github-sso')?.startsWith('partial-results')) notice = SSO_NOTICE;
-		repos.push(...data.map(toRepo));
+		for (const r of data) byName.set(r.full_name, toRepo(r));
 		if (data.length < 100) break;
 	}
+	const orgs = new Set([...account.orgs, ...[...byName.values()].map((r) => r.owner)]);
+	orgs.delete(account.login);
+	await Promise.all(
+		[...orgs].slice(0, 20).map(async (org) => {
+			const res = await ghFetch(token, `/orgs/${org}/repos?type=all&sort=pushed&per_page=100`).catch(() => null);
+			if (!res?.ok) return; // a user, not an org, or no access: the user's list has what there is
+			const data = (await res.json().catch(() => [])) as GhRepo[];
+			if (Array.isArray(data)) for (const r of data) if (!byName.has(r.full_name)) byName.set(r.full_name, toRepo(r));
+		})
+	);
+	const repos = [...byName.values()].sort((a, b) => (b.pushedAt ?? '').localeCompare(a.pushedAt ?? ''));
 	const list = { repos, notice };
 	repoCache.set(account.id, { at: Date.now(), list });
 	return list;
