@@ -16,6 +16,11 @@
 	} = $props();
 
 	let repos = $state<GithubRepo[]>([]);
+	let notice = $state<string | null>(null);
+	// Found past the list: GitHub's search by name, or the repo typed as owner/name.
+	let found = $state<GithubRepo[]>([]);
+	let searching = $state(false);
+	let lookupError = $state('');
 	let loading = $state(false);
 	let error = $state('');
 	let open = $state(false);
@@ -30,10 +35,13 @@
 		loading = true;
 		error = '';
 		try {
-			repos = await api.get<GithubRepo[]>(`/api/github-accounts/${account.id}/repos${refresh ? '?refresh' : ''}`);
+			const r = await api.get<{ repos: GithubRepo[]; notice: string | null }>(`/api/github-accounts/${account.id}/repos${refresh ? '?refresh' : ''}`);
+			repos = r.repos;
+			notice = r.notice;
 		} catch (err) {
 			error = errorMessage(err);
 			repos = [];
+			notice = null;
 		}
 		loading = false;
 	}
@@ -44,10 +52,43 @@
 		void load();
 	});
 
+	// The list holds the thousand most recently pushed: past it, ask GitHub. A full owner/name is
+	// checked directly, so a repo the token can't see says why instead of just not appearing.
+	$effect(() => {
+		const id = account?.id;
+		const q = value.trim();
+		found = [];
+		lookupError = '';
+		if (!id || q.length < 2 || q.includes('://')) return;
+		const ctrl = new AbortController();
+		const t = setTimeout(async () => {
+			searching = true;
+			const full = /^[\w.-]+\/[\w.-]+$/.test(q);
+			try {
+				if (full && !repos.some((r) => r.fullName.toLowerCase() === q.toLowerCase())) {
+					found = [await api.get<GithubRepo>(`/api/github-accounts/${id}/repos?repo=${encodeURIComponent(q)}`, ctrl.signal)];
+				} else if (!full) {
+					found = await api.get<GithubRepo[]>(`/api/github-accounts/${id}/repos?search=${encodeURIComponent(q)}`, ctrl.signal);
+				}
+			} catch (err) {
+				if (!ctrl.signal.aborted && full) lookupError = errorMessage(err);
+			}
+			if (!ctrl.signal.aborted) searching = false;
+		}, 400);
+		return () => {
+			clearTimeout(t);
+			ctrl.abort();
+			searching = false;
+		};
+	});
+
 	const owners = $derived([...new Set(repos.map((r) => r.owner))]);
 	const matches = $derived.by(() => {
 		const q = value.trim().toLowerCase();
-		return repos.filter((r) => (!owner || r.owner === owner) && (!q || r.fullName.toLowerCase().includes(q))).slice(0, 40);
+		const listed = repos.filter((r) => (!owner || r.owner === owner) && (!q || r.fullName.toLowerCase().includes(q)));
+		const known = new Set(listed.map((r) => r.fullName));
+		const more = found.filter((r) => !known.has(r.fullName) && (!owner || r.owner === owner));
+		return [...listed, ...more].slice(0, 40);
 	});
 
 	function pick(r: GithubRepo) {
@@ -89,7 +130,7 @@
 			}}
 			{onkeydown}
 		/>
-		{#if loading}<LoaderCircle class="absolute top-2.5 right-3 size-4 animate-spin text-muted-foreground" />{/if}
+		{#if loading || searching}<LoaderCircle class="absolute top-2.5 right-3 size-4 animate-spin text-muted-foreground" />{/if}
 	</div>
 
 	{#if account && owners.length > 1}
@@ -104,6 +145,8 @@
 		</div>
 	{/if}
 	{#if error}<p class="mt-1.5 text-xs text-danger">{error}</p>{/if}
+	{#if lookupError}<p class="mt-1.5 text-xs text-danger">{lookupError}</p>{/if}
+	{#if notice}<p class="mt-1.5 text-xs text-warning">{notice}</p>{/if}
 
 	{#if open && matches.length}
 		<ul class="absolute z-20 mt-1.5 max-h-80 w-full overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-surface-lg">

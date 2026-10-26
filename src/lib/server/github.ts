@@ -13,8 +13,8 @@ import { refreshGithubCredentials } from './sessions/github.ts';
 const API = 'https://api.github.com';
 
 /** A GitHub REST call, with the account's token or anonymously (public repos). */
-async function gh<T>(token: string | undefined, path: string): Promise<{ data: T; headers: Headers }> {
-	const res = await fetch(`${API}${path}`, {
+function ghFetch(token: string | undefined, path: string): Promise<Response> {
+	return fetch(`${API}${path}`, {
 		headers: {
 			accept: 'application/vnd.github+json',
 			...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -23,6 +23,10 @@ async function gh<T>(token: string | undefined, path: string): Promise<{ data: T
 		},
 		signal: AbortSignal.timeout(15_000)
 	});
+}
+
+async function gh<T>(token: string | undefined, path: string): Promise<{ data: T; headers: Headers }> {
+	const res = await ghFetch(token, path);
 	if (res.status === 401) throw new BadRequest('GitHub rejected the token (expired or revoked?)');
 	if (res.status === 404 && !token) throw new BadRequest('Repository not found (private? pick a GitHub account)');
 	if (!res.ok) {
@@ -99,22 +103,66 @@ const toRepo = (r: GhRepo): GithubRepo => ({
 	url: r.html_url
 });
 
-const repoCache = new Map<string, { at: number; repos: GithubRepo[] }>();
+const repoCache = new Map<string, { at: number; list: RepoList }>();
+
+/** A token's repositories, and why some may be missing from them. */
+export type RepoList = { repos: GithubRepo[]; notice: string | null };
+
+// Organizations with SAML single sign-on hide their repos from a token until it's authorized.
+const SSO_NOTICE =
+	'Some of your organizations use single sign-on and leave their repos out until this token is authorized for them: on GitHub, Settings → Developer settings → Personal access tokens → Configure SSO.';
 
 /** Every repo the token can see (own, collaborator, org member), most recently pushed first. */
-export async function listRepos(account: GithubAccount, refresh = false): Promise<GithubRepo[]> {
+export async function listRepos(account: GithubAccount, refresh = false): Promise<RepoList> {
 	const hit = repoCache.get(account.id);
-	if (!refresh && hit && Date.now() - hit.at < 2 * 60_000) return hit.repos;
+	if (!refresh && hit && Date.now() - hit.at < 2 * 60_000) return hit.list;
 	const token = getGithubToken(account.id);
-	if (!token) return [];
+	if (!token) return { repos: [], notice: null };
 	const repos: GithubRepo[] = [];
+	let notice: string | null = null;
 	for (let page = 1; page <= 10; page++) {
-		const { data } = await gh<GhRepo[]>(token, `/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`);
+		const { data, headers } = await gh<GhRepo[]>(token, `/user/repos?per_page=100&page=${page}&sort=pushed&affiliation=owner,collaborator,organization_member`);
+		if (headers.get('x-github-sso')?.startsWith('partial-results')) notice = SSO_NOTICE;
 		repos.push(...data.map(toRepo));
 		if (data.length < 100) break;
 	}
-	repoCache.set(account.id, { at: Date.now(), repos });
-	return repos;
+	const list = { repos, notice };
+	repoCache.set(account.id, { at: Date.now(), list });
+	return list;
+}
+
+/**
+ * Repos whose name matches, among the owners the token knows (its user, its orgs, the owners
+ * in its list): GitHub's search finds those past the first thousand of the list too.
+ */
+export async function searchRepos(account: GithubAccount, query: string): Promise<GithubRepo[]> {
+	const words = query.replace(/[^\w.-]+/g, ' ').trim();
+	if (!words) return [];
+	const known = repoCache.get(account.id)?.list.repos.map((r) => r.owner) ?? [];
+	const owners = [...new Set([account.login, ...account.orgs, ...known])].slice(0, 20);
+	const q = `${words} in:name ${owners.map((o) => `user:${o}`).join(' ')}`;
+	const { data } = await gh<{ items: GhRepo[] }>(getGithubToken(account.id), `/search/repositories?q=${encodeURIComponent(q)}&per_page=30&sort=updated`);
+	return data.items.map(toRepo);
+}
+
+/** One repo by owner/name, or a plain account of why this token can't see it. */
+export async function lookupRepo(account: GithubAccount, fullName: string): Promise<GithubRepo> {
+	if (!FULL_NAME.test(fullName)) throw new BadRequest('Enter the repository as owner/name');
+	const token = getGithubToken(account.id);
+	const res = await ghFetch(token, `/repos/${fullName}`);
+	if (res.ok) return toRepo((await res.json()) as GhRepo);
+	if (res.status === 401) throw new BadRequest('GitHub rejected the token (expired or revoked?)');
+	const owner = fullName.split('/')[0];
+	const sso = res.headers.get('x-github-sso');
+	const ssoUrl = sso?.match(/url=(\S+)/)?.[1];
+	if (ssoUrl) throw new BadRequest(`${owner} uses single sign-on: authorize this token for it at ${ssoUrl}, then try again.`);
+	const message = ((await res.json().catch(() => ({}))) as { message?: string }).message;
+	if (res.status !== 404) throw new BadRequest(`GitHub: ${message ?? res.statusText}`);
+	throw new BadRequest(
+		token?.startsWith('github_pat_')
+			? `This token can't see ${fullName}. A fine-grained token needs ${owner} as its resource owner, access to this repository (or all of ${owner}'s), and Contents permission; ${owner}'s owners may also have to approve it (${owner} → Settings → Personal access tokens → Pending requests).`
+			: `This token can't see ${fullName}. A classic token needs the repo scope, and the account has to be able to open the repository on github.com.`
+	);
 }
 
 export async function listBranches(account: GithubAccount | null, fullName: string): Promise<string[]> {

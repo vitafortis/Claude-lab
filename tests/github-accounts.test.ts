@@ -52,3 +52,43 @@ test('signing in with GitHub again replaces that login’s signed-in connection'
 	assert.equal(a.id, b.id);
 	assert.equal(store.getGithubToken(a.id), 'oauth-2');
 });
+
+// GitHub's answers, faked: what each kind of token gets for a repo it can't see.
+const github = await import('#lib/server/github.ts');
+function fakeGithub(handler: (url: URL) => Response) {
+	const real = globalThis.fetch;
+	globalThis.fetch = (async (input: RequestInfo | URL) => handler(new URL(String(input)))) as typeof fetch;
+	return () => (globalThis.fetch = real);
+}
+const repoJson = (full: string) => ({ full_name: full, name: full.split('/')[1], owner: { login: full.split('/')[0] }, private: true, default_branch: 'main', description: null, pushed_at: null, html_url: `https://github.com/${full}` });
+
+test('lookupRepo explains why a token cannot see a repo', async () => {
+	const fine = store.upsertGithubAccount(input('github_pat_abc'), { label: 'Org' });
+	const classic = store.upsertGithubAccount(input('ghp_abc'), { label: 'Classic' });
+	let restore = fakeGithub(() => new Response('{"message":"Not Found"}', { status: 404 }));
+	await assert.rejects(github.lookupRepo(fine, 'Acme/tier'), /resource owner.*Pending requests/);
+	await assert.rejects(github.lookupRepo(classic, 'Acme/tier'), /repo scope/);
+	restore();
+	restore = fakeGithub(() => new Response('{"message":"Not Found"}', { status: 404, headers: { 'x-github-sso': 'required; url=https://github.com/orgs/Acme/sso?authorization_request=1' } }));
+	await assert.rejects(github.lookupRepo(classic, 'Acme/tier'), /single sign-on: authorize this token for it at https:\/\/github.com\/orgs\/Acme\/sso/);
+	restore();
+	restore = fakeGithub(() => Response.json(repoJson('Acme/tier')));
+	assert.equal((await github.lookupRepo(fine, 'Acme/tier')).fullName, 'Acme/tier');
+	restore();
+});
+
+test('searchRepos asks GitHub by name among the known owners; the list flags SSO gaps', async () => {
+	const a = store.upsertGithubAccount({ ...input('ghp_search'), orgs: ['Acme'] }, { label: 'Search' });
+	let asked = '';
+	const restore = fakeGithub((url) => {
+		if (url.pathname === '/user/repos') return Response.json([repoJson('octo/one')], { headers: { 'x-github-sso': 'partial-results; organizations=1' } });
+		asked = url.searchParams.get('q') ?? '';
+		return Response.json({ items: [repoJson('Acme/tier-service')] });
+	});
+	const list = await github.listRepos(a, true);
+	assert.match(list.notice ?? '', /single sign-on/);
+	const found = await github.searchRepos(a, 'tier');
+	assert.equal(found[0].fullName, 'Acme/tier-service');
+	assert.match(asked, /^tier in:name user:octo user:Acme/);
+	restore();
+});
