@@ -24,7 +24,6 @@ import {
 	deleteSession as deleteSessionRow,
 	getGitIdentity,
 	getGithubAccount,
-	getGithubToken,
 	containerNamesInUse,
 	getSession,
 	getSettings,
@@ -34,6 +33,7 @@ import {
 import { agentArgs, sessionWorkdir, slugify, type LaunchMode } from '#lib/launch.ts';
 import { agentSetup, supportsRemoteControl, type AgentSetup } from '../providers.ts';
 import { accountRel, backing, conversationsDir, ensureDirs, metaDir, mountSpec, sessionRel } from './storage.ts';
+import { GIT_ENV, writeGithubCredentials } from './github.ts';
 import { hasConversations } from './transcripts.ts';
 import type { Session, Settings } from '#lib/types.ts';
 
@@ -91,10 +91,10 @@ const FALLBACK_IDENTITY = { name: 'Claude', email: 'noreply@anthropic.com' };
 
 function githubEnv(accountId: string | null): string[] {
 	const account = accountId && getGithubAccount(accountId) ? accountId : null;
-	const token = account ? getGithubToken(account) : undefined;
 	const who = (account && getGitIdentity(account)) || FALLBACK_IDENTITY;
 	return [
-		...(token ? [`GH_TOKEN=${token}`] : []),
+		// The token itself is in files kept current while the session runs (see ./github.ts).
+		...GIT_ENV,
 		`GIT_AUTHOR_NAME=${who.name}`,
 		`GIT_AUTHOR_EMAIL=${who.email}`,
 		`GIT_COMMITTER_NAME=${who.name}`,
@@ -172,6 +172,7 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 		const settings = getSettings();
 		const b = await backing();
 		ensureDirs(accountRel(s.accountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.ccm`);
+		writeGithubCredentials(s);
 		const agent = agentSetup(s.accountId); // fails early if the account is gone
 		await ensureImage(agent.image);
 		writeLaunch(s, agent, launch ?? defaultLaunch(s));
@@ -202,6 +203,7 @@ export async function stopSession(id: string): Promise<Session> {
 		await removeContainer(s.containerId);
 	}
 	await removeOwned(s.containerName);
+	writeGithubCredentials(s, { remove: true });
 	setSessionState(id, { status: 'stopped', containerId: null, error: null, stopped: true });
 	return getSession(id)!;
 }
@@ -225,6 +227,7 @@ export async function relaunchAgent(id: string, launch?: LaunchMode): Promise<Se
 		throw new Conflict('The session changed accounts since it started. Stop and start it to switch.');
 	}
 	writeLaunch(session, agent, launch ?? defaultLaunch(session));
+	writeGithubCredentials(session);
 	const r = await exec(container, ['tmux', 'respawn-pane', '-k', '-t', 'main', 'ccm-launch'], { user: 'node' });
 	if (r.exitCode !== 0) throw new DockerError(r.stderr.trim() || 'Could not restart the agent');
 	return session;
@@ -278,6 +281,7 @@ export async function reconcile() {
 			const code = info.State.ExitCode ?? 0;
 			const logs = code !== 0 ? await containerLogs(info.Id, 20).catch(() => '') : '';
 			await removeContainer(info.Id);
+			writeGithubCredentials(s, { remove: true });
 			setSessionState(s.id, {
 				status: code === 0 ? 'stopped' : 'error',
 				containerId: null,
@@ -285,6 +289,7 @@ export async function reconcile() {
 				stopped: true
 			});
 		} else if (s.status === 'running' || s.status === 'starting') {
+			writeGithubCredentials(s, { remove: true });
 			setSessionState(s.id, { status: 'stopped', containerId: null, stopped: true });
 		}
 	}

@@ -8,6 +8,7 @@ import { config } from './config.ts';
 import { BadRequest } from './http.ts';
 import { getGithubToken, getSettings, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
 import type { GithubAccount, GithubPull, GithubRepo, SessionPr } from '#lib/types.ts';
+import { refreshGithubCredentials } from './sessions/github.ts';
 
 const API = 'https://api.github.com';
 
@@ -75,6 +76,7 @@ export async function addGithubToken(token: string, kind: GithubAccount['kind'],
 	};
 	const account = upsertGithubAccount(input, opts);
 	repoCache.delete(account.id);
+	refreshGithubCredentials(account.id);
 	return account;
 }
 

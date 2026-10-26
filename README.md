@@ -196,7 +196,7 @@ Add a **fine-grained token** with access to the repos you want (*Contents* and *
 
 **Sign in with GitHub** appears once **Settings → GitHub OAuth app** names an OAuth app of yours with *Enable Device Flow* checked (GitHub → Settings → Developer settings → OAuth Apps). No client secret or callback URL is needed.
 
-In a session, `GH_TOKEN` is set to the session's GitHub account, so `git clone/push` over https and `gh` work without further setup.
+In a session, git and `gh` sign in as the session's GitHub account without further setup: `git clone`, `pull` and `push` (SSH remotes such as `git@github.com:…` go over https), `gh pr create` and the rest. The token sits in `/session/.ccm` (`github-token`, and `gh/hosts.yml` for gh) and stays current while the session runs: pick another GitHub account in the session panel, or replace an expired token under **Accounts → GitHub**, and the next push uses it, with no restart.
 
 ## Linear
 

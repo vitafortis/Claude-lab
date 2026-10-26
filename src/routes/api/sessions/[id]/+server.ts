@@ -5,6 +5,7 @@ import { parseModel, parseName, parsePermissionMode } from '#lib/server/sessions
 import { pokeLive } from '#lib/server/sessions/live.ts';
 import { deleteSession } from '#lib/server/sessions/runtime.ts';
 import { getAccount, getGithubAccount, getSession, updateSession } from '#lib/server/store.ts';
+import { writeGithubCredentials } from '#lib/server/sessions/github.ts';
 import type { RequestHandler } from './$types';
 
 function load(id: string) {
@@ -40,7 +41,10 @@ export const PATCH: RequestHandler = handler(async ({ params, request }) => {
 		throw new BadRequest(`${AGENT_LABEL[s.agent]} doesn't have that permission mode`);
 	}
 	updateSession(params.id, patch);
-	return json(load(params.id));
+	const updated = load(params.id);
+	// A running session switches GitHub accounts at once: git and gh read the token from files.
+	if ('githubAccountId' in patch && (updated.status === 'running' || updated.status === 'starting')) writeGithubCredentials(updated);
+	return json(updated);
 });
 
 /** Stops the session and deletes its repo clone, home folder and transcripts. */
