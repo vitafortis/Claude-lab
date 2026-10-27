@@ -58,10 +58,12 @@
 
 	let ws: WebSocket | null = null;
 	let send: (data: string) => void = () => {};
+	let forget = () => {};
 	let focusTerm: () => void = () => {};
 
 	/** Types into the terminal as if from the keyboard. */
 	export function input(data: string) {
+		forget();
 		send(data);
 	}
 
@@ -130,9 +132,11 @@
 			if (new URLSearchParams(location.search).get('debug') === 'input' && term.textarea) {
 				inputLog = [`${navigator.userAgent} · ${term.cols}x${term.rows}`];
 				const ta = term.textarea;
+				// On the host, capturing: Android input is taken over there before it reaches the textarea.
 				const show = (v: string | null | undefined) => JSON.stringify(v ?? null);
 				for (const type of ['keydown', 'keyup', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'focus', 'blur'] as const) {
-					ta.addEventListener(type, (e) => {
+					host.addEventListener(type, (e) => {
+						if (e.target !== ta) return;
 						const extra =
 							e instanceof KeyboardEvent ? `key=${show(e.key)} code=${e.keyCode}` : e instanceof InputEvent ? `${e.inputType} data=${show(e.data)}` : e instanceof CompositionEvent ? `data=${show(e.data)}` : '';
 						note(`${type} ${extra} value=${show(ta.value)}`);
@@ -224,6 +228,64 @@
 			};
 			term.onData((d) => send(d));
 			term.onBinary((d) => send(d));
+
+			// Android keyboards report every key as 229 and edit xterm's hidden textarea directly:
+			// composing words, autocorrecting, and re-editing earlier words, e.g. after the layout
+			// changes. xterm diffs that textarea, and when an earlier part changes it resends the
+			// whole of it: text typed so far appears twice. So on Android the difference is sent
+			// here: backspaces for what the keyboard removed, then what it added. Keys xterm handles
+			// itself (Enter, arrows, a hardware keyboard) still go to xterm.
+			let offAndroid = () => {};
+			if (/Android/i.test(navigator.userAgent) && term.textarea) {
+				const ta = term.textarea;
+				let synced = '';
+				let hardKey = false;
+				const sync = () => {
+					const now = ta.value;
+					let same = 0;
+					while (same < synced.length && same < now.length && synced[same] === now[same]) same++;
+					const out = '\x7f'.repeat(synced.length - same) + now.slice(same);
+					synced = now;
+					if (out) send(out);
+				};
+				// The terminal's line moved on without the textarea (Enter, arrows, a key bar button).
+				forget = () => {
+					ta.value = '';
+					synced = '';
+				};
+				const keydown = (e: KeyboardEvent) => {
+					if (e.target !== ta) return;
+					if (e.keyCode === 229) return e.stopPropagation();
+					hardKey = true;
+					setTimeout(() => (hardKey = false));
+					if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) setTimeout(forget);
+				};
+				const composition = (e: Event) => {
+					if (e.target === ta) e.stopPropagation();
+				};
+				const input = (e: Event) => {
+					if (e.target !== ta) return;
+					// A hardware key's character: xterm sends it.
+					if (hardKey && (e as InputEvent).inputType === 'insertText') {
+						synced = ta.value;
+						return;
+					}
+					e.stopPropagation();
+					sync();
+				};
+				const blur = () => (synced = ''); // xterm empties the textarea on blur
+				const types = ['compositionstart', 'compositionupdate', 'compositionend'];
+				host.addEventListener('keydown', keydown, true);
+				host.addEventListener('input', input, true);
+				for (const t of types) host.addEventListener(t, composition, true);
+				ta.addEventListener('blur', blur);
+				offAndroid = () => {
+					host.removeEventListener('keydown', keydown, true);
+					host.removeEventListener('input', input, true);
+					for (const t of types) host.removeEventListener(t, composition, true);
+					ta.removeEventListener('blur', blur);
+				};
+			}
 
 			const sendSize = () => {
 				if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'r', c: term.cols, r: term.rows }));
@@ -318,6 +380,7 @@
 				host.removeEventListener('touchend', onTouchEnd, true);
 				host.removeEventListener('touchcancel', onTouchEnd, true);
 				ro.disconnect();
+				offAndroid();
 				ws?.close();
 				term.dispose();
 			};
