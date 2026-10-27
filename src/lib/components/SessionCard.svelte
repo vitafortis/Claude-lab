@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRight, ChevronDown, CircleAlert, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Trash2, Wrench } from '@lucide/svelte';
+	import { ArrowRight, ChevronDown, CircleAlert, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, CircleStop, Trash2, Wrench } from '@lucide/svelte';
 	import StateBadge from './StateBadge.svelte';
 	import BrandIcon from './BrandIcon.svelte';
 	import SessionTags from './SessionTags.svelte';
@@ -38,7 +38,7 @@
 
 	// End: stop (repo and conversations stay) or delete it outright; a failed session has nothing to stop.
 	const endItems = $derived([
-		...(running ? [{ label: 'Stop', hint: 'Keeps the repo and conversations', icon: Square, onclick: () => act(() => stopSession(s)) }] : []),
+		...(running ? [{ label: 'Stop', hint: 'Keeps the repo and conversations', icon: CircleStop, onclick: () => act(() => stopSession(s)) }] : []),
 		{ label: 'Delete session', hint: 'Its clone, home folder and conversations', icon: Trash2, danger: true, onclick: () => act(() => deleteSession(s, '')) }
 	]);
 
@@ -125,8 +125,8 @@
 			{#if running || s.status === 'error'}
 				<Menu items={endItems} side="top">
 					{#snippet trigger({ toggle })}
-						<button class="btn btn-ghost btn-sm" title="Stop or delete this session" disabled={busy} onclick={toggle}>
-							{#if busy}<LoaderCircle class="animate-spin" />{:else}<Square />{/if}End<ChevronDown />
+						<button class="btn btn-danger btn-sm" title="Stop or delete this session" disabled={busy} onclick={toggle}>
+							{#if busy}<LoaderCircle class="animate-spin" />{:else}<CircleStop />{/if}End session<ChevronDown />
 						</button>
 					{/snippet}
 				</Menu>

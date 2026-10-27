@@ -19,7 +19,7 @@
 		RotateCcw,
 		ExternalLink,
 		Sparkles,
-		Square,
+		CircleStop,
 		SquareTerminal,
 		TerminalSquare,
 		Trash2,
@@ -217,7 +217,7 @@
 		{ label: 'Continue newest conversation', hint: `Restart ${agentName} and pick up where it left off`, icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
 		{ label: 'New conversation', hint: 'Fresh context, same repo and branch', icon: FilePlus2, onclick: () => launch({ mode: 'new' }) },
 		'separator' as const,
-		{ label: running ? 'Stop session' : 'Start session', hint: running ? 'Keeps the repo and conversations' : 'Continue the newest conversation', icon: running ? Square : Play, onclick: () => act(() => (running ? stopSession(s) : startSession(s))) },
+		{ label: running ? 'Stop session' : 'Start session', hint: running ? 'Keeps the repo and conversations' : 'Continue the newest conversation', icon: running ? CircleStop : Play, onclick: () => act(() => (running ? stopSession(s) : startSession(s))) },
 		{ label: 'Delete session', icon: Trash2, danger: true, onclick: () => deleteSession(s) }
 	]);
 </script>
