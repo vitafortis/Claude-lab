@@ -152,7 +152,10 @@
 		</div>
 	{/if}
 	{#if error}<p class="mt-1.5 text-xs text-danger">{error}</p>{/if}
-	{#if lookupError}<p class="mt-1.5 text-xs text-danger">{lookupError}</p>{/if}
+	{#if lookupError}
+		<p class="mt-1.5 text-xs text-danger">{lookupError}</p>
+		{#if account}<a class="mt-1 inline-block text-xs text-primary hover:underline" href="/accounts?check={account.id}&repo={encodeURIComponent(value.trim())}#github">See exactly what GitHub answers this token →</a>{/if}
+	{/if}
 	{#if notice}<p class="mt-1.5 text-xs text-warning">{notice}</p>{/if}
 
 	{#if open && matches.length}

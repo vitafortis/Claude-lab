@@ -110,13 +110,28 @@ test("listRepos adds each organization's own list, where a token's private org r
 	restore();
 });
 
-test('lookupRepo points at "Public repositories" access when a token sees no private repo', async () => {
+test('lookupRepo says so when GitHub lists no private repo for the token', async () => {
 	const a = store.upsertGithubAccount(input('github_pat_public'), { label: 'Public only' });
 	const restore = fakeGithub((url) => {
 		if (url.pathname === '/user/repos' || url.pathname.startsWith('/orgs/')) return Response.json([{ ...repoJson('Acme/site'), private: false }]);
 		return new Response('{"message":"Not Found"}', { status: 404 });
 	});
 	await github.listRepos(a, true);
-	await assert.rejects(github.lookupRepo(a, 'Acme/tier'), /no private repositories at all.*Public repositories/);
+	await assert.rejects(github.lookupRepo(a, 'Acme/tier'), /"Not Found" for Acme\/tier.*no private repositories/);
+	restore();
+});
+
+test('checkToken reports which token is stored and what GitHub answers, as is', async () => {
+	const a = store.upsertGithubAccount(input('github_pat_11ABCDEFG0123456789wxyz'), { label: 'Checked' });
+	const restore = fakeGithub((url) => {
+		if (url.pathname === '/user') return Response.json({ login: 'octo' });
+		if (url.pathname === '/repos/Acme/tier') return new Response('{"message":"Not Found"}', { status: 404, headers: { 'x-accepted-github-permissions': 'metadata=read' } });
+		return Response.json([repoJson('Acme/tier')]);
+	});
+	const r = await github.checkToken(a, 'Acme/tier');
+	assert.equal(r.kind, 'Fine-grained token');
+	assert.equal(r.token, 'github_pat_11ABC…wxyz');
+	assert.deepEqual(r.checks.map((c) => c.status), [200, 200, 200, 404]);
+	assert.equal(r.checks[3].headers['x-accepted-github-permissions'], 'metadata=read');
 	restore();
 });

@@ -243,6 +243,8 @@
 			if (add === 'model') openAdd();
 			else if (add === 'github') openToken(null);
 		}
+		const check = data.githubAccounts.find((a) => a.id === page.url.searchParams.get('check'));
+		if (check) openCheck(check, page.url.searchParams.get('repo') ?? '');
 	});
 
 	async function check(a: ModelAccount) {
@@ -343,6 +345,33 @@
 	}
 
 	// ── GitHub ──────────────────────────────────────────────────────────
+
+	// "Check access": GitHub's raw answers for a token, to see why a repo is missing.
+	type TokenCheck = { kind: string; token: string; checks: { label: string; path: string; status: number; answer: string; headers: Record<string, string> }[] };
+	let checking_ = $state<GithubAccount | null>(null);
+	let checkRepo = $state('');
+	let checkResult = $state<TokenCheck | null>(null);
+	let checkBusy = $state(false);
+	let checkError = $state('');
+	async function runCheck(e?: SubmitEvent) {
+		e?.preventDefault();
+		if (!checking_) return;
+		checkBusy = true;
+		checkError = '';
+		try {
+			checkResult = await api.get<TokenCheck>(`/api/github-accounts/${checking_.id}/check${checkRepo.trim() ? `?repo=${encodeURIComponent(checkRepo.trim())}` : ''}`);
+		} catch (err) {
+			checkError = errorMessage(err);
+		}
+		checkBusy = false;
+	}
+	function openCheck(a: GithubAccount, repo = '') {
+		checking_ = a;
+		checkRepo = repo;
+		checkResult = null;
+		checkError = '';
+		void runCheck();
+	}
 
 	let addingToken = $state(false);
 	/** The connection being edited (rename or new token); null when adding one. */
@@ -573,6 +602,7 @@
 						</div>
 						<div class="ml-auto flex items-center gap-1">
 							<button class="btn btn-ghost btn-icon btn-sm" title="Refresh organizations" onclick={() => refreshGithub(a)}><RefreshCw /></button>
+							<button class="btn btn-ghost btn-sm" title="Ask GitHub what this token can see" onclick={() => openCheck(a)}>Check access</button>
 							<button class="btn btn-ghost btn-icon btn-sm" title="Rename or replace the token" onclick={() => openToken(a)}><Pencil /></button>
 							<button class="btn btn-ghost btn-icon btn-sm hover:text-danger" title="Disconnect" onclick={() => removeGithub(a)}><Trash2 /></button>
 						</div>
@@ -748,6 +778,31 @@
 		<button class="btn btn-ghost" onclick={() => (profileOpen = false)}>Cancel</button>
 		<button class="btn btn-primary" form="profile" disabled={saving}>{#if saving}<LoaderCircle class="animate-spin" />{/if}{profileEditing ? 'Save' : 'Add profile'}</button>
 	{/snippet}
+</Dialog>
+
+<Dialog bind:open={() => !!checking_, (v) => !v && (checking_ = null)} title={checking_ ? `What GitHub says about ${githubLabel(checking_)}` : ''} description="GitHub's own answers to this token, as they come back." width="max-w-2xl">
+	<form class="flex gap-2" onsubmit={runCheck}>
+		<input class="input font-mono text-xs" placeholder="owner/name of a repo to check (optional)" spellcheck="false" bind:value={checkRepo} />
+		<button class="btn btn-secondary shrink-0" disabled={checkBusy}>{#if checkBusy}<LoaderCircle class="animate-spin" />{:else}<RefreshCw />{/if}Check</button>
+	</form>
+	{#if checkError}<p class="mt-3 text-xs text-danger">{checkError}</p>{/if}
+	{#if checkResult}
+		<p class="mt-4 text-[0.8125rem]">{checkResult.kind} <code class="ml-1 font-mono text-xs text-muted-foreground">{checkResult.token}</code></p>
+		<p class="text-xs text-muted-foreground">Compare the start and end with the token you meant to add.</p>
+		<div class="mt-3 divide-y divide-border rounded-lg border border-border">
+			{#each checkResult.checks as c (c.path)}
+				<div class="space-y-1 px-3 py-2.5 text-xs">
+					<p class="flex items-center gap-2">
+						<span class="badge {c.status < 300 ? 'badge-success' : 'badge-danger'} font-mono">{c.status}</span>
+						<span class="font-medium">{c.label}</span>
+						<code class="ml-auto truncate font-mono text-[0.6875rem] text-muted-foreground">GET {c.path}</code>
+					</p>
+					<p class="break-words">{c.answer}</p>
+					{#each Object.entries(c.headers) as [h, v] (h)}<p class="font-mono text-[0.6875rem] break-all text-muted-foreground">{h}: {v}</p>{/each}
+				</div>
+			{/each}
+		</div>
+	{/if}
 </Dialog>
 
 <Dialog bind:open={addingToken} title={editingGithub ? `Edit ${githubLabel(editingGithub)}` : 'Add a GitHub token'} width="max-w-xl">

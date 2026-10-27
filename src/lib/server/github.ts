@@ -191,12 +191,10 @@ export async function lookupRepo(account: GithubAccount, fullName: string): Prom
 	if (ssoUrl) throw new BadRequest(`${owner} uses single sign-on: authorize this token for it at ${ssoUrl}, then try again.`);
 	const message = ((await res.json().catch(() => ({}))) as { message?: string }).message;
 	if (res.status !== 404) throw new BadRequest(`GitHub: ${message ?? res.statusText}`);
-	// A token that sees no private repo anywhere is limited to public ones, whatever its owner.
+	// Facts only: what GitHub returned, not a guess at the token's settings.
 	const listed = repoCache.get(account.id)?.list.repos;
-	if (token?.startsWith('github_pat_') && listed?.length && !listed.some((r) => r.private)) {
-		throw new BadRequest(
-			`This token can't see ${fullName}, and GitHub shows it no private repositories at all: its Repository access is most likely "Public repositories". On GitHub, open the token (Settings → Developer settings → Fine-grained tokens), set Repository access to "All repositories" (or select ${fullName}) with ${owner} as the resource owner and Contents read and write, and save. Then reload the list here.`
-		);
+	if (listed?.length && !listed.some((r) => r.private)) {
+		throw new BadRequest(`GitHub answers "Not Found" for ${fullName} with this token, and has listed no private repositories for it anywhere.`);
 	}
 	throw new BadRequest(
 		token?.startsWith('github_pat_')
@@ -314,4 +312,39 @@ export async function pollDeviceFlow(handle: string): Promise<{ state: 'pending'
 	if (r.error === 'authorization_pending' || r.error === 'slow_down') return { state: 'pending', interval: p.interval };
 	pending.delete(handle);
 	return { state: r.error === 'access_denied' ? 'denied' : 'expired' };
+}
+
+export type TokenCheck = { label: string; path: string; status: number; answer: string; headers: Record<string, string> };
+
+// Response headers that say what a token is and what GitHub wanted from it.
+const TELLING = ['x-oauth-scopes', 'x-accepted-oauth-scopes', 'x-accepted-github-permissions', 'x-github-sso', 'github-authentication-token-expiration'];
+
+/**
+ * What GitHub answers this token, as it answers: no interpretation. Which token is stored
+ * (its start and end), who it is, how many private repos it sees, and the repo asked about.
+ */
+export async function checkToken(account: GithubAccount, repo: string | null) {
+	const token = getGithubToken(account.id) ?? '';
+	const kind = token.startsWith('github_pat_') ? 'Fine-grained token' : token.startsWith('ghp_') ? 'Classic token' : token.startsWith('gho_') ? 'GitHub sign-in' : 'Unknown kind';
+	const owner = repo?.split('/')[0];
+	const probes: [string, string][] = [
+		['Who the token is', '/user'],
+		['Private repos in your list', '/user/repos?visibility=private&per_page=100'],
+		...(owner ? ([[`${owner}'s private repos`, `/orgs/${owner}/repos?type=private&per_page=100`]] as [string, string][]) : []),
+		...(repo ? ([[repo, `/repos/${repo}`]] as [string, string][]) : [])
+	];
+	const checks: TokenCheck[] = [];
+	for (const [label, path] of probes) {
+		const res = await ghFetch(token, path);
+		const body = (await res.json().catch(() => null)) as unknown;
+		let answer: string;
+		if (Array.isArray(body)) answer = `${body.length} repos${body.length ? `: ${body.slice(0, 8).map((r: GhRepo) => r.full_name).join(', ')}${body.length > 8 ? '…' : ''}` : ''}`;
+		else {
+			const b = (body ?? {}) as { message?: string; login?: string; full_name?: string; private?: boolean };
+			answer = b.message ?? (b.full_name ? `${b.full_name} (${b.private ? 'private' : 'public'})` : b.login ? `signed in as ${b.login}` : res.statusText);
+		}
+		const headers = Object.fromEntries(TELLING.flatMap((h) => (res.headers.get(h) ? [[h, res.headers.get(h)!]] : [])));
+		checks.push({ label, path, status: res.status, answer, headers });
+	}
+	return { kind, token: token ? `${token.slice(0, token.startsWith('github_pat_') ? 16 : 8)}…${token.slice(-4)}` : '(none stored)', checks };
 }
