@@ -2,9 +2,11 @@
 	import { goto } from '$app/navigation';
 	import { CornerDownLeft, KeyRound, LayoutDashboard, Moon, Plus, Search, Settings, TerminalSquare, Wand, Workflow } from '@lucide/svelte';
 	import StateDot from './StateDot.svelte';
-	import { sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
+	import { setTheme, theme, useSessions } from '#lib/client/state.svelte.ts';
 	import { displayState, sortForOverview, type DisplayState } from '#lib/session-state.ts';
 	import type { Component } from 'svelte';
+
+	const shown = useSessions();
 
 	type Item = { id: string; label: string; hint?: string; icon?: Component; state?: DisplayState; run: () => void };
 
@@ -15,11 +17,11 @@
 	let dialog: HTMLDialogElement;
 
 	const items = $derived.by((): Item[] => [
-		...sortForOverview(sessions.list, sessions.live).map((s) => ({
+		...sortForOverview(shown.list, shown.live).map((s) => ({
 			id: `s:${s.id}`,
 			label: s.name,
 			hint: s.repoFullName ?? s.repoUrl,
-			state: displayState(s, sessions.live[s.id]),
+			state: displayState(s, shown.live[s.id]),
 			run: () => goto(`/s/${s.id}`)
 		})),
 		{ id: 'new', label: 'New session', icon: Plus, run: () => goto('/new') },

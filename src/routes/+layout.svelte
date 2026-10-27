@@ -28,7 +28,7 @@
 	import CommandPalette from '#lib/components/CommandPalette.svelte';
 	import StateDot from '#lib/components/StateDot.svelte';
 	import { api } from '#lib/client/api.ts';
-	import { connectLive, session, sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
+	import { connectLive, provideSessions, session, sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
 	import { displayState, glowClass, sortForOverview, STATE_META, type DisplayState } from '#lib/session-state.ts';
 	import { ago } from '#lib/client/format.ts';
 	import type { LayoutProps } from './$types';
@@ -39,8 +39,10 @@
 	$effect.pre(() => {
 		sessions.list = data.sessions;
 		sessions.live = Object.fromEntries(data.live.map((l) => [l.id, l]));
+		sessions.seeded = true;
 		session.viewer = data.viewer;
 	});
+	const shown = provideSessions(() => data);
 
 	$effect(() => {
 		theme.value = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
@@ -85,13 +87,13 @@
 		} catch {}
 	}
 	const ordered = $derived.by(() => {
-		const all = sortForOverview(sessions.list, sessions.live);
+		const all = sortForOverview(shown.list, shown.live);
 		return [...all.filter((s) => pinned.includes(s.id)), ...all.filter((s) => !pinned.includes(s.id))];
 	});
 
 	/** The sidebar's second line: what the session is doing. */
 	function doing(s: Session, view: DisplayState): { text: string; tone: string } {
-		const sum = sessions.live[s.id]?.summary;
+		const sum = shown.live[s.id]?.summary;
 		switch (view) {
 			case 'waiting':
 				return { text: 'Needs you', tone: 'text-warning' };
@@ -175,7 +177,7 @@
 	<div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pt-0.5 pb-2">
 		{#each ordered as s (s.id)}
 			{@const active = page.url.pathname === `/s/${s.id}`}
-			{@const view = displayState(s, sessions.live[s.id])}
+			{@const view = displayState(s, shown.live[s.id])}
 			{@const now = doing(s, view)}
 			{@const isPinned = pinned.includes(s.id)}
 			<div class="group relative">

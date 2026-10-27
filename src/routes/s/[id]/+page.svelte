@@ -44,17 +44,19 @@
 	import PanelSection from '#lib/components/PanelSection.svelte';
 	import { CLAUDE_ALIASES, modelLabel } from '#lib/models.ts';
 	import { findQuestion, type Question } from '#lib/pane.ts';
-	import { confirmAction, sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
+	import { confirmAction, sessions, toast, upsertSession, useSessions } from '#lib/client/state.svelte.ts';
 	import { displayState, glowClass } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type Conversation, type Session, type SessionLive, type SkillOption } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
+	const shown = useSessions();
+
 	let { data }: PageProps = $props();
 
-	const s = $derived(sessions.list.find((x) => x.id === data.session.id) ?? data.session);
-	const live = $derived(sessions.live[s.id]);
+	const s = $derived(shown.list.find((x) => x.id === data.session.id) ?? data.session);
+	const live = $derived(shown.live[s.id]);
 	const view = $derived(displayState(s, live));
 	const running = $derived(s.status === 'running');
 	// The panel keeps the last summary and git state it had for this session: an update that

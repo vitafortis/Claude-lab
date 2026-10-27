@@ -1,3 +1,4 @@
+import { getContext, setContext } from 'svelte';
 import type { Session, SessionLive, Viewer } from '#lib/types.ts';
 
 type Toast = { id: number; kind: 'info' | 'success' | 'error'; title: string; body?: string };
@@ -52,12 +53,38 @@ export function confirmAction(opts: Omit<ConfirmRequest, 'resolve'>): Promise<bo
  * Sessions and their live state, shared by the sidebar, overview and session pages.
  * Seeded by the layout's load, then kept current by one Server-Sent Events stream.
  */
-export const sessions = $state<{ list: Session[]; live: Record<string, SessionLive>; connected: boolean }>({
+export const sessions = $state<{ list: Session[]; live: Record<string, SessionLive>; connected: boolean; seeded: boolean }>({
 	list: [],
 	live: {},
+	// Set once the layout has filled the store in the browser (never in the server render).
+	seeded: false,
 	// Optimistic: "offline" shows only after the stream actually drops.
 	connected: true
 });
+
+type SessionsView = { readonly list: Session[]; readonly live: Record<string, SessionLive> };
+const VIEW = Symbol('sessions');
+
+/**
+ * For the root layout: what the pages read sessions from. The shared store once it's seeded in
+ * the browser; before that (the server render, the first frame) the layout's own load data, so
+ * the page arrives with its sessions instead of filling them in after it has been drawn.
+ */
+export function provideSessions(load: () => { sessions: Session[]; live: SessionLive[] }): SessionsView {
+	const view: SessionsView = {
+		get list() {
+			return sessions.seeded ? sessions.list : load().sessions;
+		},
+		get live() {
+			return sessions.seeded ? sessions.live : Object.fromEntries(load().live.map((l) => [l.id, l]));
+		}
+	};
+	setContext(VIEW, view);
+	return view;
+}
+
+/** The sessions and their live state, from provideSessions. */
+export const useSessions = () => getContext<SessionsView>(VIEW);
 
 let source: EventSource | null = null;
 

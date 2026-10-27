@@ -35,7 +35,7 @@
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
-	import { confirmAction, sessions, toast } from '#lib/client/state.svelte.ts';
+	import { confirmAction, toast, useSessions } from '#lib/client/state.svelte.ts';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import { matchProfile } from '#lib/profiles.ts';
@@ -43,6 +43,8 @@
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES, fitPermissionMode, type KindSpec } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type AccountKind, type Agent, type GithubAccount, type ModelAccount, type PermissionMode, type Profile } from '#lib/types.ts';
 	import type { PageProps } from './$types';
+
+	const shown = useSessions();
 
 	let { data }: PageProps = $props();
 
@@ -483,7 +485,7 @@
 	<PageHeader title="Accounts" description="The models sessions run on, which repos use which, and how sessions reach GitHub." />
 
 	<div class="max-w-4xl space-y-8 px-4 pb-12 sm:px-8">
-		{#if !sessions.list.length}
+		{#if !shown.list.length}
 			<GettingStarted compact accounts={data.accounts} signingIn={data.signingIn} githubAccounts={data.githubAccounts.length} onaddmodel={openAdd} onaddgithub={() => openToken(null)} />
 		{/if}
 
