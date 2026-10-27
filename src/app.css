@@ -273,7 +273,8 @@
 	   terminal is disconnected. --glow is the colour; the -inset form frames the terminal, which
 	   fills its area edge to edge. Motion pauses for people who turn animations off. */
 	.glow,
-	.glow-inset {
+	.glow-inset,
+	.glow-sm {
 		--glow: var(--muted-foreground);
 	}
 	.glow-green {
@@ -287,19 +288,28 @@
 	}
 	.glow {
 		box-shadow:
-			0 0 0 1px color-mix(in oklch, var(--glow) 45%, transparent),
-			0 0 18px -4px color-mix(in oklch, var(--glow) 30%, transparent);
+			0 0 0 2px color-mix(in oklch, var(--glow) 75%, transparent),
+			0 0 20px -2px color-mix(in oklch, var(--glow) 35%, transparent);
 	}
 	.glow-inset {
 		box-shadow:
-			inset 0 0 0 1px color-mix(in oklch, var(--glow) 40%, transparent),
-			inset 0 0 22px -8px color-mix(in oklch, var(--glow) 35%, transparent);
+			inset 0 0 0 2px color-mix(in oklch, var(--glow) 75%, transparent),
+			inset 0 0 24px -6px color-mix(in oklch, var(--glow) 40%, transparent);
+	}
+	/* The sidebar's rows: a thin edge in the session's colour. */
+	.glow-sm {
+		box-shadow:
+			inset 0 0 0 1px color-mix(in oklch, var(--glow) 55%, transparent),
+			0 0 10px -4px color-mix(in oklch, var(--glow) 45%, transparent);
 	}
 	.glow.glow-gray {
-		box-shadow: 0 0 0 1px color-mix(in oklch, var(--glow) 28%, transparent);
+		box-shadow: 0 0 0 2px color-mix(in oklch, var(--glow) 45%, transparent);
 	}
 	.glow-inset.glow-gray {
-		box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--glow) 28%, transparent);
+		box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--glow) 45%, transparent);
+	}
+	.glow-sm.glow-gray {
+		box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--glow) 35%, transparent);
 	}
 	.glow.glow-breathe {
 		animation: glow-breathe 2.8s ease-in-out infinite;
@@ -325,25 +335,25 @@
 	0%,
 	100% {
 		box-shadow:
-			0 0 0 1px color-mix(in oklch, var(--glow) 40%, transparent),
-			0 0 14px -4px color-mix(in oklch, var(--glow) 22%, transparent);
+			0 0 0 2px color-mix(in oklch, var(--glow) 65%, transparent),
+			0 0 16px -4px color-mix(in oklch, var(--glow) 28%, transparent);
 	}
 	50% {
 		box-shadow:
-			0 0 0 1px color-mix(in oklch, var(--glow) 75%, transparent),
-			0 0 28px 0 color-mix(in oklch, var(--glow) 38%, transparent);
+			0 0 0 2px var(--glow),
+			0 0 30px 2px color-mix(in oklch, var(--glow) 45%, transparent);
 	}
 }
 @keyframes glow-breathe-inset {
 	0%,
 	100% {
 		box-shadow:
-			inset 0 0 0 1px color-mix(in oklch, var(--glow) 35%, transparent),
-			inset 0 0 20px -8px color-mix(in oklch, var(--glow) 28%, transparent);
+			inset 0 0 0 2px color-mix(in oklch, var(--glow) 65%, transparent),
+			inset 0 0 20px -8px color-mix(in oklch, var(--glow) 30%, transparent);
 	}
 	50% {
 		box-shadow:
-			inset 0 0 0 2px color-mix(in oklch, var(--glow) 70%, transparent),
-			inset 0 0 34px -4px color-mix(in oklch, var(--glow) 45%, transparent);
+			inset 0 0 0 2px var(--glow),
+			inset 0 0 36px -4px color-mix(in oklch, var(--glow) 50%, transparent);
 	}
 }

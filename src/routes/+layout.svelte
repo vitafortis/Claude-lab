@@ -29,7 +29,7 @@
 	import StateDot from '#lib/components/StateDot.svelte';
 	import { api } from '#lib/client/api.ts';
 	import { connectLive, session, sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
-	import { displayState, sortForOverview, STATE_META, type DisplayState } from '#lib/session-state.ts';
+	import { displayState, glowClass, sortForOverview, STATE_META, type DisplayState } from '#lib/session-state.ts';
 	import { ago } from '#lib/client/format.ts';
 	import type { LayoutProps } from './$types';
 
@@ -172,7 +172,7 @@
 		<div class="mt-4"></div>
 	{/if}
 
-	<div class="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
+	<div class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-2 pt-0.5 pb-2">
 		{#each ordered as s (s.id)}
 			{@const active = page.url.pathname === `/s/${s.id}`}
 			{@const view = displayState(s, sessions.live[s.id])}
@@ -182,7 +182,7 @@
 				<a
 					href="/s/{s.id}"
 					title="{s.name} — {s.repoFullName ?? s.repoUrl}"
-					class="flex items-center gap-2.5 rounded-lg px-2.5 transition-colors {compact ? 'h-8 justify-center' : 'py-1.5 pr-8'} {active
+					class="flex items-center gap-2.5 rounded-lg px-2.5 transition-colors {glowClass(view, { small: true })} {compact ? 'h-8 justify-center' : 'py-1.5 pr-8'} {active
 						? 'bg-accent text-foreground'
 						: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'}"
 				>

@@ -294,7 +294,7 @@
 						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} onscreen={(lines) => (question = mode === 'claude' ? findQuestion(lines) : null)} />
 					{/key}
 					<!-- The agent's state as a glow around its terminal, over it but never in the way. -->
-					{#if mode === 'claude'}<div class="pointer-events-none absolute inset-0 z-10 {glowClass(view, { inset: true, connected: conn !== 'closed' })}"></div>{/if}
+					<div class="pointer-events-none absolute inset-0 z-10 {glowClass(view, { inset: true, connected: conn !== 'closed' })}"></div>
 				</div>
 				{#if touch}
 					<!-- Keys a touch keyboard lacks. Pressing one keeps the terminal focused, so the keyboard stays up. -->

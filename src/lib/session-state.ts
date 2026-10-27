@@ -17,8 +17,8 @@ export const STATE_META: Record<DisplayState, { label: string; dot: string; badg
  * while the agent works; yellow pulsing when it needs you; red on an error; gray when it's
  * stopped, or `connected` is false (its terminal lost the container).
  */
-export function glowClass(state: DisplayState, opts: { inset?: boolean; connected?: boolean } = {}): string {
-	const base = opts.inset ? 'glow-inset' : 'glow';
+export function glowClass(state: DisplayState, opts: { inset?: boolean; small?: boolean; connected?: boolean } = {}): string {
+	const base = opts.small ? 'glow-sm' : opts.inset ? 'glow-inset' : 'glow';
 	if (opts.connected === false) return `${base} glow-gray`;
 	switch (state) {
 		case 'working':
