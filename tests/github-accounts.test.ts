@@ -109,3 +109,14 @@ test("listRepos adds each organization's own list, where a token's private org r
 	assert.equal((await github.ownerRepos(a, 'Hidden')).length, 2);
 	restore();
 });
+
+test('lookupRepo points at "Public repositories" access when a token sees no private repo', async () => {
+	const a = store.upsertGithubAccount(input('github_pat_public'), { label: 'Public only' });
+	const restore = fakeGithub((url) => {
+		if (url.pathname === '/user/repos' || url.pathname.startsWith('/orgs/')) return Response.json([{ ...repoJson('Acme/site'), private: false }]);
+		return new Response('{"message":"Not Found"}', { status: 404 });
+	});
+	await github.listRepos(a, true);
+	await assert.rejects(github.lookupRepo(a, 'Acme/tier'), /no private repositories at all.*Public repositories/);
+	restore();
+});

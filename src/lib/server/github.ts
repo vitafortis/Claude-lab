@@ -191,6 +191,13 @@ export async function lookupRepo(account: GithubAccount, fullName: string): Prom
 	if (ssoUrl) throw new BadRequest(`${owner} uses single sign-on: authorize this token for it at ${ssoUrl}, then try again.`);
 	const message = ((await res.json().catch(() => ({}))) as { message?: string }).message;
 	if (res.status !== 404) throw new BadRequest(`GitHub: ${message ?? res.statusText}`);
+	// A token that sees no private repo anywhere is limited to public ones, whatever its owner.
+	const listed = repoCache.get(account.id)?.list.repos;
+	if (token?.startsWith('github_pat_') && listed?.length && !listed.some((r) => r.private)) {
+		throw new BadRequest(
+			`This token can't see ${fullName}, and GitHub shows it no private repositories at all: its Repository access is most likely "Public repositories". On GitHub, open the token (Settings → Developer settings → Fine-grained tokens), set Repository access to "All repositories" (or select ${fullName}) with ${owner} as the resource owner and Contents read and write, and save. Then reload the list here.`
+		);
+	}
 	throw new BadRequest(
 		token?.startsWith('github_pat_')
 			? `This token can't see ${fullName}. A fine-grained token needs ${owner} as its resource owner, access to this repository (or all of ${owner}'s), and Contents permission; ${owner}'s owners may also have to approve it (${owner} → Settings → Personal access tokens → Pending requests).`
