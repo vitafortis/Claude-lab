@@ -259,7 +259,7 @@ Orbital used to be called cc·modern (and briefly Orbit), with `cc-modern` image
        name: cc-modern-sessions
    ```
 
-3. **Switch images** to `ghcr.io/vitafortis/orbital` and `…/orbital-session`. A custom session image saved in Settings stays as it is; rebuild it `FROM ghcr.io/vitafortis/orbital-session` so it has the renamed `orb-*` scripts.
+3. **Switch images** to `ghcr.io/vitafortis/orbital` and `…/orbital-session`. If Settings names `ghcr.io/vitafortis/cc-modern-session`, sessions use `orbital-session` (same tag) on their own. A custom session image saved in Settings stays as it is; rebuild it `FROM ghcr.io/vitafortis/orbital-session` so it has the renamed `orb-*` scripts.
 
 `CCM_*` variables still work, but rename them to `ORB_*`. On start, Orbital takes over `cc-modern.db` (as `orbital.db`) and renames each session's `.ccm` folder to `.orb`; stored tokens stay readable, and the browser keeps its theme, pins and panel layout. Everyone is signed out once, since the cookie was renamed too.
 

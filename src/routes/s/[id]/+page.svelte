@@ -47,7 +47,7 @@
 	import { findQuestion, type Question } from '#lib/pane.ts';
 	import { confirmAction, sessions, toast, upsertSession, useSessions } from '#lib/client/state.svelte.ts';
 	import { displayState, glowClass } from '#lib/session-state.ts';
-	import { sessionWorkdir } from '#lib/launch.ts';
+	import { repoLabel, sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type Conversation, type Session, type SessionLive, type SkillOption } from '#lib/types.ts';
 	import type { PageProps } from './$types';
@@ -279,7 +279,7 @@
 				</h1>
 			{/if}
 			<p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-				<span class="truncate">{s.repoFullName ?? s.repoUrl}</span>
+				<span class="truncate">{repoLabel(s)}</span>
 				{#if git?.branch ?? s.newBranch ?? s.baseBranch}
 					<GitBranch class="size-3 shrink-0" /><span class="truncate font-mono text-[0.6875rem]">{git?.branch ?? s.newBranch ?? s.baseBranch}</span>
 				{/if}

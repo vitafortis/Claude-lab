@@ -1,7 +1,7 @@
 import { BadRequest, str } from '../http.ts';
 import { getAccount, getGithubAccount } from '../store.ts';
 import { fitPermissionMode } from '#lib/providers.ts';
-import { isValidBranch, parseRepo, type LaunchMode } from '#lib/launch.ts';
+import { isValidBranch, parseRepo, repoDirName, slugify, type LaunchMode } from '#lib/launch.ts';
 import { PERMISSION_MODES, type PermissionMode, type SessionInput } from '#lib/types.ts';
 
 const MODEL = /^[A-Za-z0-9._[\]-]{1,80}$/;
@@ -29,8 +29,11 @@ export function parseName(v: unknown): string {
 const COMMAND = /^\/[A-Za-z0-9][A-Za-z0-9:_.-]{0,80}$/;
 
 export function parseSessionInput(b: Record<string, unknown>): SessionInput & { repoDir: string } {
-	const repo = parseRepo(str(b, 'repo', { required: true }) ?? '');
-	if (!repo) throw new BadRequest('Enter a GitHub repository (owner/name) or an https git URL');
+	// No repo: the session starts in an empty folder (git initialised) named after the session.
+	const typed = str(b, 'repo');
+	const repo = typed ? parseRepo(typed) : null;
+	if (typed && !repo) throw new BadRequest('Enter a GitHub repository (owner/name) or an https git URL');
+	if (!repo && typeof b.name !== 'string') throw new BadRequest('Name the session: without a repo, its folder is named after it');
 
 	const accountId = str(b, 'accountId', { required: true })!;
 	const account = getAccount(accountId);
@@ -52,22 +55,25 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 	if (b.checkoutPr !== undefined && b.checkoutPr !== null && b.checkoutPr !== '') {
 		checkoutPr = Number(b.checkoutPr);
 		if (!Number.isInteger(checkoutPr) || checkoutPr < 1) throw new BadRequest('Pull request must be a number');
-		if (!repo.fullName) throw new BadRequest('Pull requests can only be checked out from GitHub repositories');
+		if (!repo?.fullName) throw new BadRequest('Pull requests can only be checked out from GitHub repositories');
 	}
 
 	const baseBranch = str(b, 'baseBranch', { max: 200 });
 	const newBranch = str(b, 'newBranch', { max: 200 });
 	for (const br of [baseBranch, newBranch]) if (br && !isValidBranch(br)) throw new BadRequest(`"${br}" isn't a valid branch name`);
+	if (!repo && baseBranch) throw new BadRequest('Without a repo there is no branch to start from');
 
-	const defaultName = skill ? `${repo.dir} ${skill.split(' ')[0].slice(1)}${checkoutPr ? ` #${checkoutPr}` : ''}` : repo.dir;
+	const dir = repo?.dir ?? '';
+	const defaultName = skill ? `${dir} ${skill.split(' ')[0].slice(1)}${checkoutPr ? ` #${checkoutPr}` : ''}` : dir;
+	const name = parseName(b.name ?? defaultName);
 	return {
-		name: parseName(b.name ?? defaultName),
+		name,
 		kind,
 		skill,
 		checkoutPr,
-		repoUrl: repo.url,
-		repoFullName: repo.fullName,
-		repoDir: repo.dir,
+		repoUrl: repo?.url ?? '',
+		repoFullName: repo?.fullName ?? null,
+		repoDir: repo?.dir ?? (repoDirName(slugify(name, 60)) || 'workspace'),
 		baseBranch,
 		newBranch,
 		accountId,

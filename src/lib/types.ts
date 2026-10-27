@@ -129,6 +129,7 @@ export interface Session {
 	agent: Agent;
 	pr: SessionPr | null;
 	linear: LinearRef | null;
+	/** Empty for a session started without a repo, in an empty folder. */
 	repoUrl: string;
 	/** owner/name for GitHub repos, null for other URLs. */
 	repoFullName: string | null;

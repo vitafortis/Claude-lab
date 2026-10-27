@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount, tick, untrack } from 'svelte';
-	import { ChevronDown, CircleAlert, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, SlidersHorizontal, Wand } from '@lucide/svelte';
+	import { ChevronDown, CircleAlert, FolderPlus, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, SlidersHorizontal, Wand } from '@lucide/svelte';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -59,7 +59,10 @@
 	const agent = $derived(account?.agent ?? 'claude');
 	const agentName = $derived(agent === 'claude' ? 'Claude' : AGENT_LABEL[agent]);
 	const github = $derived(data.githubAccounts.find((a) => a.id === githubAccountId) ?? null);
-	const parsed = $derived(parseRepo(repo));
+	// Without a repo the session starts in an empty folder (git initialised) named after it.
+	let noRepo = $state(false);
+	let noRepoToken = $state(untrack(() => data.githubAccounts[0]?.id ?? ''));
+	const parsed = $derived(noRepo ? null : parseRepo(repo));
 
 	// Which tokens can open the repo: asked of GitHub once the repo is named, each token in turn.
 	let access = $state<{ repo: string; tokens: TokenAccess[] | null; error: string } | null>(null);
@@ -144,7 +147,7 @@
 	// Name follows the repo, branch, skill and PR until edited by hand.
 	$effect(() => {
 		if (nameTouched) return;
-		if (!parsed) name = '';
+		if (!parsed) name = noRepo ? name : '';
 		else if (mode === 'skill') name = `${parsed.dir} ${command.replace(/^\//, '')}${checkoutPr ? ` #${checkoutPr}` : ''}`;
 		else name = checkoutPr ? `${parsed.dir} #${checkoutPr}` : newBranch ? `${parsed.dir} · ${newBranch}` : parsed.dir;
 	});
@@ -267,12 +270,12 @@
 				kind: mode,
 				command: mode === 'skill' ? command : undefined,
 				args: mode === 'skill' ? args : undefined,
-				checkoutPr,
-				repo,
+				repo: noRepo ? '' : repo,
 				accountId,
-				githubAccountId: githubAccountId || null,
-				baseBranch: checkoutPr ? null : baseBranch || null,
-				newBranch: newBranch || null,
+				githubAccountId: (noRepo ? noRepoToken : githubAccountId) || null,
+				checkoutPr: noRepo ? null : checkoutPr,
+				baseBranch: noRepo || checkoutPr ? null : baseBranch || null,
+				newBranch: noRepo ? null : newBranch || null,
 				prompt: prompt || null,
 				model: model || null,
 				permissionMode,
@@ -322,111 +325,133 @@
 		{/if}
 
 		<section class="card space-y-3 p-4">
-			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Repository</h2>
-			<div>
-				<RepoPicker logins={[...new Set(data.githubAccounts.map((a) => a.login))]} bind:value={repo} onpick={(r) => (picked = r)} />
-				{#if repo && !parsed}<p class="mt-1.5 text-xs text-danger">Enter owner/name, or an https git URL.</p>{/if}
-				{#if !data.githubAccounts.length}
-					<p class="mt-1.5 text-xs text-muted-foreground">Public repos and git URLs only. <a href="/accounts?add=github" class="text-primary hover:underline">Add a GitHub token</a> for private ones and pushing.</p>
-				{:else if access}
-					<div class="mt-2 text-xs">
-						{#if !access.tokens}
-							<p class="flex items-center gap-1.5 text-muted-foreground"><LoaderCircle class="size-3.5 animate-spin" />Checking which GitHub token can open {access.repo}…</p>
-						{:else if access.error}
-							<p class="text-danger">{access.error}</p>
-						{:else if !usable.length}
-							<p class="font-medium text-danger">None of your GitHub tokens can open {access.repo}.</p>
-							<ul class="mt-1 space-y-1">
-								{#each access.tokens as t (t.accountId)}
-									{@const a = ghAccount(t.accountId)}
-									<li class="text-muted-foreground"><span class="font-medium text-foreground">{a ? githubLabel(a) : 'Token'}</span>: {t.reason} <a class="text-primary hover:underline" href="/accounts?check={t.accountId}&repo={encodeURIComponent(access.repo)}#github">What GitHub answers →</a></li>
-								{/each}
-							</ul>
-						{:else}
-							{@const using = access.tokens.find((t) => t.accountId === githubAccountId)}
-							<button type="button" class="flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left text-muted-foreground" aria-expanded={showTokens} onclick={() => (showTokens = !showTokens)}>
-								<BrandIcon brand="github" class="size-3.5 shrink-0" />
-								<span>Using <span class="font-medium text-foreground">{github ? githubLabel(github) : 'a token'}</span></span>
-								<span>· {usable.length === 1 ? 'the only token that can open it' : tokenPicked ? 'picked by you' : `stricter of ${usable.length} that can open it`}</span>
-								{#if usable.length > 1 || access.tokens.length > 1}<span class="inline-flex items-center text-primary">{showTokens ? 'Hide' : usable.length > 1 ? 'Change' : 'Details'}<ChevronDown class="size-3.5 transition-transform {showTokens ? 'rotate-180' : ''}" /></span>{/if}
-							</button>
-							{#if !showTokens && using}<p class="mt-0.5 pl-5 text-[0.6875rem] text-muted-foreground/80">{facts(using).join(' · ')}</p>{/if}
-							{#if showTokens}
-								<ul class="mt-2 space-y-1.5">
-									{#each access.tokens as t (t.accountId)}
-										{@const a = ghAccount(t.accountId)}
-										<li>
-											<label class="flex items-start gap-2.5 rounded-lg border px-3 py-2 {t.ok ? 'cursor-pointer' : 'opacity-60'} {t.accountId === githubAccountId ? 'border-primary/60 bg-primary-soft' : 'border-border'}">
-												<input
-													type="radio"
-													name="token"
-													class="mt-0.5"
-													value={t.accountId}
-													disabled={!t.ok}
-													checked={t.accountId === githubAccountId}
-													onchange={() => {
-														githubAccountId = t.accountId;
-														tokenPicked = t.accountId !== usable[0]?.accountId;
-													}}
-												/>
-												<span class="min-w-0 flex-1">
-													<span class="block text-[0.8125rem] font-medium text-foreground">{a ? githubLabel(a) : 'Token'}{#if t === usable[0]}<span class="ml-1.5 badge badge-primary">stricter</span>{/if}</span>
-													<span class="block text-[0.6875rem] text-muted-foreground">{t.ok ? facts(t).join(' · ') : t.reason}</span>
-												</span>
-											</label>
-										</li>
-									{/each}
-								</ul>
-								<p class="mt-1.5 text-[0.6875rem] text-muted-foreground/80">Preferred: tokens GitHub reports write access for (sessions push), then fine-grained before classic, less access before more, fewer repos before more. "Access" is the permissions field GitHub returns for this repo with each token.</p>
-							{/if}
-						{/if}
+			<div class="flex items-center justify-between gap-3">
+				<h2 class="text-[0.9375rem] font-semibold tracking-tight">Repository</h2>
+				<button type="button" class="text-xs text-primary hover:underline" onclick={() => (noRepo = !noRepo)}>{noRepo ? 'Use a repo' : 'Start without a repo'}</button>
+			</div>
+			{#if noRepo}
+				<div class="flex items-start gap-2.5 rounded-lg border border-dashed border-border px-3 py-2.5 text-xs text-muted-foreground">
+					<FolderPlus class="mt-0.5 size-4 shrink-0" />
+					<p>
+						An empty folder named after the session, with git initialised: for a new project. To put it on GitHub, ask the agent, or run
+						<code class="font-mono text-foreground">gh repo create &lt;name&gt; --private --source . --push</code> in the Shell tab.
+					</p>
+				</div>
+				{#if data.githubAccounts.length}
+					<div>
+						<label class="label flex items-center gap-1.5" for="nrgh"><BrandIcon brand="github" class="size-3.5" />GitHub token <span class="font-normal text-muted-foreground/70">(for gh and pushing)</span></label>
+						<select id="nrgh" class="input" bind:value={noRepoToken}>
+							{#each data.githubAccounts as a (a.id)}<option value={a.id}>{githubLabel(a)}</option>{/each}
+							<option value="">None</option>
+						</select>
 					</div>
 				{/if}
-			</div>
-			{#if pulls.length}
+			{:else}
 				<div>
-					<label class="label" for="pr">Check out a pull request <span class="font-normal text-muted-foreground/70">(optional)</span></label>
-					<div class="relative">
-						<GitPullRequest class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
-						<select id="pr" class="input pl-9" bind:value={checkoutPr}>
-							<option value={null}>No pull request</option>
-							{#each pulls as p (p.number)}
-								<option value={p.number}>#{p.number} {p.title}{p.author ? ` · ${p.author}` : ''}{p.draft ? ' · draft' : ''} · {ago(p.updatedAt)}</option>
-							{/each}
-						</select>
+					<RepoPicker logins={[...new Set(data.githubAccounts.map((a) => a.login))]} bind:value={repo} onpick={(r) => (picked = r)} />
+					{#if repo && !parsed}<p class="mt-1.5 text-xs text-danger">Enter owner/name, or an https git URL.</p>{/if}
+					{#if !data.githubAccounts.length}
+						<p class="mt-1.5 text-xs text-muted-foreground">Public repos and git URLs only. <a href="/accounts?add=github" class="text-primary hover:underline">Add a GitHub token</a> for private ones and pushing.</p>
+					{:else if access}
+						<div class="mt-2 text-xs">
+							{#if !access.tokens}
+								<p class="flex items-center gap-1.5 text-muted-foreground"><LoaderCircle class="size-3.5 animate-spin" />Checking which GitHub token can open {access.repo}…</p>
+							{:else if access.error}
+								<p class="text-danger">{access.error}</p>
+							{:else if !usable.length}
+								<p class="font-medium text-danger">None of your GitHub tokens can open {access.repo}.</p>
+								<ul class="mt-1 space-y-1">
+									{#each access.tokens as t (t.accountId)}
+										{@const a = ghAccount(t.accountId)}
+										<li class="text-muted-foreground"><span class="font-medium text-foreground">{a ? githubLabel(a) : 'Token'}</span>: {t.reason} <a class="text-primary hover:underline" href="/accounts?check={t.accountId}&repo={encodeURIComponent(access.repo)}#github">What GitHub answers →</a></li>
+									{/each}
+								</ul>
+							{:else}
+								{@const using = access.tokens.find((t) => t.accountId === githubAccountId)}
+								<button type="button" class="flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left text-muted-foreground" aria-expanded={showTokens} onclick={() => (showTokens = !showTokens)}>
+									<BrandIcon brand="github" class="size-3.5 shrink-0" />
+									<span>Using <span class="font-medium text-foreground">{github ? githubLabel(github) : 'a token'}</span></span>
+									<span>· {usable.length === 1 ? 'the only token that can open it' : tokenPicked ? 'picked by you' : `stricter of ${usable.length} that can open it`}</span>
+									{#if usable.length > 1 || access.tokens.length > 1}<span class="inline-flex items-center text-primary">{showTokens ? 'Hide' : usable.length > 1 ? 'Change' : 'Details'}<ChevronDown class="size-3.5 transition-transform {showTokens ? 'rotate-180' : ''}" /></span>{/if}
+								</button>
+								{#if !showTokens && using}<p class="mt-0.5 pl-5 text-[0.6875rem] text-muted-foreground/80">{facts(using).join(' · ')}</p>{/if}
+								{#if showTokens}
+									<ul class="mt-2 space-y-1.5">
+										{#each access.tokens as t (t.accountId)}
+											{@const a = ghAccount(t.accountId)}
+											<li>
+												<label class="flex items-start gap-2.5 rounded-lg border px-3 py-2 {t.ok ? 'cursor-pointer' : 'opacity-60'} {t.accountId === githubAccountId ? 'border-primary/60 bg-primary-soft' : 'border-border'}">
+													<input
+														type="radio"
+														name="token"
+														class="mt-0.5"
+														value={t.accountId}
+														disabled={!t.ok}
+														checked={t.accountId === githubAccountId}
+														onchange={() => {
+															githubAccountId = t.accountId;
+															tokenPicked = t.accountId !== usable[0]?.accountId;
+														}}
+													/>
+													<span class="min-w-0 flex-1">
+														<span class="block text-[0.8125rem] font-medium text-foreground">{a ? githubLabel(a) : 'Token'}{#if t === usable[0]}<span class="ml-1.5 badge badge-primary">stricter</span>{/if}</span>
+														<span class="block text-[0.6875rem] text-muted-foreground">{t.ok ? facts(t).join(' · ') : t.reason}</span>
+													</span>
+												</label>
+											</li>
+										{/each}
+									</ul>
+									<p class="mt-1.5 text-[0.6875rem] text-muted-foreground/80">Preferred: tokens GitHub reports write access for (sessions push), then fine-grained before classic, less access before more, fewer repos before more. "Access" is the permissions field GitHub returns for this repo with each token.</p>
+								{/if}
+							{/if}
+						</div>
+					{/if}
+				</div>
+				{#if pulls.length}
+					<div>
+						<label class="label" for="pr">Check out a pull request <span class="font-normal text-muted-foreground/70">(optional)</span></label>
+						<div class="relative">
+							<GitPullRequest class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
+							<select id="pr" class="input pl-9" bind:value={checkoutPr}>
+								<option value={null}>No pull request</option>
+								{#each pulls as p (p.number)}
+									<option value={p.number}>#{p.number} {p.title}{p.author ? ` · ${p.author}` : ''}{p.draft ? ' · draft' : ''} · {ago(p.updatedAt)}</option>
+								{/each}
+							</select>
+						</div>
+					</div>
+				{/if}
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div class={checkoutPr ? 'pointer-events-none opacity-50' : ''}>
+						<label class="label" for="base">Start from branch {#if checkoutPr}<span class="font-normal">(the PR's)</span>{/if}</label>
+						{#if branches.length}
+							<select id="base" class="input font-mono text-[0.8125rem]" bind:value={baseBranch}>
+								<option value="">Default branch</option>
+								{#each branches as b (b)}<option value={b}>{b}</option>{/each}
+							</select>
+						{:else}
+							<input id="base" class="input font-mono text-[0.8125rem]" placeholder="Default branch" bind:value={baseBranch} />
+						{/if}
+					</div>
+					<div>
+						<label class="label flex items-center justify-between" for="nb">
+							<span>New branch <span class="font-normal text-muted-foreground/70">(optional)</span></span>
+							<button type="button" class="text-primary hover:underline" onclick={suggestBranch}>Suggest</button>
+						</label>
+						<div class="relative">
+							<GitBranch class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
+							<input id="nb" class="input pl-9 font-mono text-[0.8125rem]" placeholder="claude/fix-login" bind:value={newBranch} />
+						</div>
 					</div>
 				</div>
 			{/if}
-			<div class="grid gap-3 sm:grid-cols-2">
-				<div class={checkoutPr ? 'pointer-events-none opacity-50' : ''}>
-					<label class="label" for="base">Start from branch {#if checkoutPr}<span class="font-normal">(the PR's)</span>{/if}</label>
-					{#if branches.length}
-						<select id="base" class="input font-mono text-[0.8125rem]" bind:value={baseBranch}>
-							<option value="">Default branch</option>
-							{#each branches as b (b)}<option value={b}>{b}</option>{/each}
-						</select>
-					{:else}
-						<input id="base" class="input font-mono text-[0.8125rem]" placeholder="Default branch" bind:value={baseBranch} />
-					{/if}
-				</div>
-				<div>
-					<label class="label flex items-center justify-between" for="nb">
-						<span>New branch <span class="font-normal text-muted-foreground/70">(optional)</span></span>
-						<button type="button" class="text-primary hover:underline" onclick={suggestBranch}>Suggest</button>
-					</label>
-					<div class="relative">
-						<GitBranch class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
-						<input id="nb" class="input pl-9 font-mono text-[0.8125rem]" placeholder="claude/fix-login" bind:value={newBranch} />
-					</div>
-				</div>
-			</div>
 		</section>
 
 		<section class="card space-y-3 p-4">
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Session</h2>
 			<div>
 				<label class="label" for="name">Name</label>
-				<input id="name" class="input" placeholder="Named after the repo" bind:value={name} oninput={() => (nameTouched = true)} />
+				<input id="name" class="input" placeholder={noRepo ? 'Also the folder name, e.g. invoice-parser' : 'Named after the repo'} required={noRepo} bind:value={name} oninput={() => (nameTouched = true)} />
 			</div>
 			{#if mode === 'skill'}
 				<div>
@@ -554,7 +579,7 @@
 		{#if error}<p class="rounded-lg bg-danger/10 px-3 py-2 text-[0.8125rem] text-danger">{error}</p>{/if}
 		<div class="flex items-center justify-end gap-2">
 			<a href="/" class="btn btn-ghost">Cancel</a>
-			<button class="btn btn-primary" disabled={busy || !parsed || !accountId || (mode === 'skill' && (!command.startsWith('/') || agent !== 'claude'))}>
+			<button class="btn btn-primary" disabled={busy || (noRepo ? !name.trim() : !parsed) || !accountId || (mode === 'skill' && (!command.startsWith('/') || agent !== 'claude'))}>
 				{#if busy}<LoaderCircle class="animate-spin" />{:else}<Rocket />{/if}{mode === 'skill' ? 'Run skill' : 'Start session'}
 			</button>
 		</div>

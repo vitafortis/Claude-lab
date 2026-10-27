@@ -229,8 +229,13 @@ export function defaultSettings(): Settings {
 	};
 }
 
+// Images saved in Settings before the rename to Orbital: the old names are no longer published,
+// and their scripts expect the CCM_ variables, so sessions on them would exit at once.
+const RENAMED_IMAGE = /^ghcr\.io\/vitafortis\/cc-modern-session(?=[:@]|$)/;
+
 export function getSettings(): Settings {
-	return { ...defaultSettings(), ...getKv<Partial<Settings>>('settings', {}) };
+	const s = { ...defaultSettings(), ...getKv<Partial<Settings>>('settings', {}) };
+	return { ...s, sessionImage: s.sessionImage.replace(RENAMED_IMAGE, 'ghcr.io/vitafortis/orbital-session'), agentsImage: s.agentsImage.replace(RENAMED_IMAGE, 'ghcr.io/vitafortis/orbital-session') };
 }
 
 export function saveSettings(settings: Settings) {
