@@ -27,21 +27,27 @@
 	let owner = $state<string | null>(null);
 	let index = $state(0);
 
+	// Switching tokens supersedes a list still loading: only the newest request may fill it in,
+	// or a slow answer for the previous token could land under the new one.
+	let loadSeq = 0;
 	async function load(refresh = false) {
+		const seq = ++loadSeq;
+		repos = [];
+		notice = null;
+		error = '';
 		if (!account) {
-			repos = [];
+			loading = false;
 			return;
 		}
 		loading = true;
-		error = '';
 		try {
 			const r = await api.get<{ repos: GithubRepo[]; notice: string | null }>(`/api/github-accounts/${account.id}/repos${refresh ? '?refresh' : ''}`);
+			if (seq !== loadSeq) return;
 			repos = r.repos;
 			notice = r.notice;
 		} catch (err) {
+			if (seq !== loadSeq) return;
 			error = errorMessage(err);
-			repos = [];
-			notice = null;
 		}
 		loading = false;
 	}
