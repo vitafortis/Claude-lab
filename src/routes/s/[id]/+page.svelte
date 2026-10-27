@@ -4,8 +4,10 @@
 		ArrowUp,
 		ChevronDown,
 		CircleAlert,
+		CircleStop,
 		Copy,
 		CornerDownLeft,
+		ExternalLink,
 		FilePlus2,
 		GitBranch,
 		History,
@@ -15,15 +17,14 @@
 		MoreHorizontal,
 		PanelRightClose,
 		PanelRightOpen,
+		Pencil,
 		Play,
 		RotateCcw,
-		ExternalLink,
 		Sparkles,
-		CircleStop,
 		SquareTerminal,
 		TerminalSquare,
 		Trash2,
-		Wand
+		Wand,
 	} from '@lucide/svelte';
 	import Conversations from '#lib/components/Conversations.svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
@@ -175,6 +176,30 @@
 		}
 	}
 
+	// Renaming: the title becomes a text box; Enter (or leaving it) saves, Escape cancels.
+	let renaming = $state(false);
+	let newName = $state('');
+	function startRename() {
+		newName = s.name;
+		renaming = true;
+	}
+	async function saveName() {
+		if (!renaming) return;
+		renaming = false;
+		const name = newName.trim().replace(/\s+/g, ' ');
+		if (!name || name === s.name) return;
+		try {
+			upsertSession(await api.patch<Session>(`/api/sessions/${s.id}`, { name }));
+			toast('success', 'Renamed', isClaude && running ? `Claude's own name for the session (and Remote Control's) changes when it restarts.` : undefined);
+		} catch (err) {
+			toast('error', "Couldn't rename", errorMessage(err));
+		}
+	}
+	const focusSelect = (el: HTMLInputElement) => {
+		el.focus();
+		el.select();
+	};
+
 	/** Saves the model and, while the agent runs, offers to restart it on the newest conversation. */
 	async function changeModel(value: string) {
 		const model = value || null;
@@ -216,6 +241,8 @@
 		...(phone && isClaude ? [{ label: 'Change model…', hint: modelLabel(s.model), icon: Sparkles, onclick: () => (modelSheet = true) }] : []),
 		...(phone && s.rcUrl && running ? [{ label: 'Open in claude.ai', hint: 'Remote Control', icon: ExternalLink, onclick: () => window.open(s.rcUrl!, '_blank', 'noopener') }] : []),
 		...(phone && isClaude ? ['separator' as const] : []),
+		{ label: 'Rename…', icon: Pencil, onclick: startRename },
+		'separator' as const,
 		{ label: 'Continue newest conversation', hint: `Restart ${agentName} and pick up where it left off`, icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
 		{ label: 'New conversation', hint: 'Fresh context, same repo and branch', icon: FilePlus2, onclick: () => launch({ mode: 'new' }) },
 		'separator' as const,
@@ -232,7 +259,25 @@
 		<StateDot state={view} />
 		<!-- On phones the title gets its own row; the controls wrap below it. -->
 		<div class="min-w-0 flex-1 max-sm:basis-[calc(100%-1.25rem)]">
-			<h1 class="truncate text-[0.9375rem] leading-tight font-semibold tracking-tight">{s.name}</h1>
+			{#if renaming}
+				<input
+					class="-my-0.5 -ml-1.5 h-6 w-full max-w-md rounded-md border border-primary/60 bg-background px-1.5 text-[0.9375rem] leading-tight font-semibold tracking-tight outline-none"
+					aria-label="Session name"
+					maxlength="80"
+					bind:value={newName}
+					use:focusSelect
+					onblur={saveName}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') saveName();
+						else if (e.key === 'Escape') renaming = false;
+					}}
+				/>
+			{:else}
+				<h1 class="group flex min-w-0 items-center gap-1.5">
+					<button type="button" class="truncate text-left text-[0.9375rem] leading-tight font-semibold tracking-tight" title="Rename" onclick={startRename}>{s.name}</button>
+					<button type="button" class="shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-sm:hidden" title="Rename" aria-label="Rename session" onclick={startRename}><Pencil class="size-3.5" /></button>
+				</h1>
+			{/if}
 			<p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 				<span class="truncate">{s.repoFullName ?? s.repoUrl}</span>
 				{#if git?.branch ?? s.newBranch ?? s.baseBranch}
