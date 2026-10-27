@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { History, LoaderCircle, RotateCcw } from '@lucide/svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago, bytes, plural } from '#lib/client/format.ts';
@@ -9,6 +10,7 @@
 		sessionName,
 		current = null,
 		updated = null,
+		initial = null,
 		onresume
 	}: {
 		sessionId: string;
@@ -16,27 +18,34 @@
 		current?: string | null;
 		/** When the newest conversation last changed: the list refreshes (in place) after it. */
 		updated?: string | null;
+		/** The list as the page was loaded with it, shown until a fresh one arrives. */
+		initial?: Conversation[] | null;
 		onresume: (c: Conversation) => void;
 	} = $props();
 
 	// Conversations started with --name carry the session's name as their title; the first prompt says more.
 	const label = (c: Conversation) => (c.title && c.title !== sessionName ? c.title : (c.firstPrompt ?? c.title ?? 'Untitled'));
 
-	let list = $state<Conversation[] | null>(null);
+	let list = $state<Conversation[] | null>(untrack(() => initial));
 	let error = $state('');
 
+	// What's on screen (at first, the list the page came with) stays there while a fresh list
+	// loads, and is replaced only once that arrives.
 	export async function reload() {
+		const id = sessionId;
 		try {
-			list = await api.get<Conversation[]>(`/api/sessions/${sessionId}/conversations`);
+			const fresh = await api.get<Conversation[]>(`/api/sessions/${id}/conversations`);
+			if (id !== sessionId) return;
+			list = fresh;
 			error = '';
 		} catch (err) {
-			error = errorMessage(err);
+			if (id === sessionId) error = errorMessage(err);
 		}
 	}
 
 	$effect(() => {
-		void sessionId;
-		list = null;
+		list = untrack(() => initial);
+		error = '';
 		void reload();
 	});
 
@@ -55,7 +64,7 @@
 	});
 </script>
 
-{#if error}
+{#if error && !list}
 	<p class="text-xs text-danger">{error}</p>
 {:else if !list}
 	<!-- Placeholder rows the height of real ones, so the panel doesn't shift when they arrive. -->

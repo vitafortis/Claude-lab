@@ -59,12 +59,19 @@ export function latestSummary(s: Pick<Session, 'id' | 'accountId'>): TranscriptS
 	return summary;
 }
 
+const infoCache = new Map<string, { mtimeMs: number; size: number; info: ReturnType<typeof conversationInfo> }>();
+
+/** The session's conversations, newest first. Only files that changed since the last call are read again. */
 export function listConversations(s: Pick<Session, 'id' | 'accountId'>): Conversation[] {
 	return transcriptFiles(s)
 		.slice(0, 50)
 		.map((f) => {
-			const info = conversationInfo(readTail(f, 4 * 1024 * 1024));
-			return { id: f.id, ...info, updatedAt: new Date(f.mtimeMs).toISOString(), bytes: f.size };
+			let hit = infoCache.get(f.path);
+			if (!hit || hit.mtimeMs !== f.mtimeMs || hit.size !== f.size) {
+				hit = { mtimeMs: f.mtimeMs, size: f.size, info: conversationInfo(readTail(f, 4 * 1024 * 1024)) };
+				infoCache.set(f.path, hit);
+			}
+			return { id: f.id, ...hit.info, updatedAt: new Date(f.mtimeMs).toISOString(), bytes: f.size };
 		})
 		.filter((c) => c.messages > 0);
 }

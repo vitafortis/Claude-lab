@@ -402,7 +402,7 @@
 
 				{#if isClaude}
 					<PanelSection id="conversations" title="Conversations" icon={History}>
-						<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} updated={sum?.updatedAt} onresume={resume} />
+						<Conversations sessionId={s.id} sessionName={s.name} initial={data.conversations} current={sum?.conversationId} updated={sum?.updatedAt} onresume={resume} />
 					</PanelSection>
 				{/if}
 
