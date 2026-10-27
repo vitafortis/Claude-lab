@@ -81,7 +81,7 @@
 	}
 </script>
 
-<svelte:head><title>Settings · cc·modern</title></svelte:head>
+<svelte:head><title>Settings · Orbit</title></svelte:head>
 
 {#snippet check(ok: boolean | undefined)}
 	{#if ok === undefined}<LoaderCircle class="size-4 animate-spin text-muted-foreground" />{:else if ok}<CircleCheck class="size-4 text-success" />{:else}<CircleX class="size-4 text-danger" />{/if}
@@ -175,8 +175,8 @@
 				</div>
 				<div class="sm:col-span-2">
 					<label class="label" for="pub">Public URL</label>
-					<input id="pub" class="input font-mono text-xs" placeholder="Where you open cc·modern, e.g. https://cc.home.arpa" bind:value={form.publicUrl} />
-					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments and the SSO callback. Empty: the address you last opened cc·modern at.</p>
+					<input id="pub" class="input font-mono text-xs" placeholder="Where you open Orbit, e.g. https://cc.home.arpa" bind:value={form.publicUrl} />
+					<p class="mt-1.5 text-xs text-muted-foreground">Used for links in Linear comments and the SSO callback. Empty: the address you last opened Orbit at.</p>
 				</div>
 				<div class="sm:col-span-2">
 					<label class="label flex items-center gap-1.5" for="ghc"><BrandIcon brand="github" class="size-3.5" />GitHub OAuth app <span class="font-normal text-muted-foreground">· optional</span></label>

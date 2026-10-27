@@ -222,7 +222,7 @@
 	]);
 </script>
 
-<svelte:head><title>{s.name} · cc·modern</title></svelte:head>
+<svelte:head><title>{s.name} · Orbit</title></svelte:head>
 
 <div class="flex h-full min-h-0 flex-col">
 	<!-- Header -->
@@ -294,7 +294,7 @@
 						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} onscreen={(lines) => (question = mode === 'claude' ? findQuestion(lines) : null)} />
 					{/key}
 					<!-- The agent's state as a glow around its terminal, over it but never in the way. -->
-					{#if mode === 'claude'}<div class="pointer-events-none absolute inset-0 z-10 {glowClass(view, true)}"></div>{/if}
+					{#if mode === 'claude'}<div class="pointer-events-none absolute inset-0 z-10 {glowClass(view, { inset: true, connected: conn !== 'closed' })}"></div>{/if}
 				</div>
 				{#if touch}
 					<!-- Keys a touch keyboard lacks. Pressing one keeps the terminal focused, so the keyboard stays up. -->
@@ -312,7 +312,7 @@
 					{#if live?.tail?.length}
 						<pre class="pointer-events-none absolute inset-x-0 top-0 max-h-full overflow-hidden px-4 py-3 font-mono text-[0.6875rem] leading-[1.15rem] text-[#c9cfda] opacity-25 select-none">{live.tail.join('\n')}</pre>
 					{/if}
-					<div class="relative w-full max-w-md rounded-2xl border border-term-edge p-6 text-[#e6e8ee] shadow-surface-lg" style="background: var(--term-chrome)">
+					<div class="relative w-full max-w-md rounded-2xl p-6 text-[#e6e8ee] {glowClass(view)}" style="background: var(--term-chrome)">
 						{#if s.status === 'starting'}
 							<p class="flex items-center gap-2.5 font-medium"><LoaderCircle class="size-4 animate-spin text-primary" />Starting…</p>
 							<p class="mt-1.5 text-[0.8125rem] text-[#9aa3b2]">Creating the container. The first start also pulls the session image, which can take a minute.</p>

@@ -1,4 +1,5 @@
-# cc·modern
+# Orbit
+- Formerly cc·modern: the name shown is Orbit, but images, volumes, containers, labels and `CCM_*` settings keep their `cc-modern` / `ccm` names so existing installs keep working.
 
 - SvelteKit 3 + Svelte 5 runes + Tailwind 4, built with adapter-node. `server.js` is the production entry: it adds WebSocket upgrades (terminals), which adapter-node lacks; in dev, the plugin in `vite.config.ts` does the same.
 - The theme is the shared ·modern palette (pg-modern, octo-modern, debrief) with primary hue 255. Keep `src/app.css` in step with those projects rather than inventing new tokens.

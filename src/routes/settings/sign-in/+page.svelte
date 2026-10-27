@@ -47,7 +47,7 @@
 		if (!form.required) {
 			const ok = await confirmAction({
 				title: 'Turn sign-in off?',
-				body: 'Anyone who can reach cc·modern uses it as the admin, and can run code on this Docker host. Only do this behind a reverse proxy that already signs people in.',
+				body: 'Anyone who can reach Orbit uses it as the admin, and can run code on this Docker host. Only do this behind a reverse proxy that already signs people in.',
 				confirmLabel: 'Turn it off',
 				danger: true
 			});
@@ -121,7 +121,7 @@
 	];
 </script>
 
-<svelte:head><title>Sign-in · cc·modern</title></svelte:head>
+<svelte:head><title>Sign-in · Orbit</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="Settings" description="Where sessions run, what every session container gets, and who can sign in." />
@@ -139,13 +139,13 @@
 			<div class="flex items-center justify-between gap-4 p-5">
 				<span>
 					<span class="flex items-center gap-2 text-[0.9375rem] font-semibold tracking-tight"><ShieldCheck class="size-4 text-primary" />Require sign-in</span>
-					<span class="mt-0.5 block text-xs text-muted-foreground">Off: anyone who can reach cc·modern uses it as the admin. Only for a reverse proxy that already signs people in.</span>
+					<span class="mt-0.5 block text-xs text-muted-foreground">Off: anyone who can reach Orbit uses it as the admin. Only for a reverse proxy that already signs people in.</span>
 				</span>
 				<Switch bind:checked={form.required} label="Require sign-in" />
 			</div>
 			{#if !form.required}
 				<p class="flex items-start gap-2 bg-warning/10 px-5 py-3 text-xs text-warning">
-					<CircleAlert class="mt-px size-3.5 shrink-0" />cc·modern starts containers with access to your GitHub and model accounts: whoever opens it can run code on this host.
+					<CircleAlert class="mt-px size-3.5 shrink-0" />Orbit starts containers with access to your GitHub and model accounts: whoever opens it can run code on this host.
 				</p>
 			{/if}
 			<div class="flex items-center justify-between gap-4 p-5 {form.required ? '' : 'opacity-50'}">
@@ -170,12 +170,12 @@
 			</div>
 			{#if form.oidc.enabled}
 				<div class="rounded-lg border border-border bg-surface p-3 text-xs">
-					<p class="text-muted-foreground">Register cc·modern with your provider as a confidential web app with this redirect URI:</p>
+					<p class="text-muted-foreground">Register Orbit with your provider as a confidential web app with this redirect URI:</p>
 					<button type="button" class="mt-1.5 flex max-w-full items-center gap-1.5 font-mono text-[0.75rem] text-foreground hover:text-primary" onclick={() => copyText(data.callbackUrl, 'Copied the redirect URI')}>
 						<Copy class="size-3.5 shrink-0" /><span class="truncate">{data.callbackUrl}</span>
 					</button>
 					{#if !data.publicUrlSet}
-						<p class="mt-1.5 text-muted-foreground">Built from the address you're using now. If people open cc·modern elsewhere, set <a class="text-primary hover:underline" href="/settings">Settings → Public URL</a> first.</p>
+						<p class="mt-1.5 text-muted-foreground">Built from the address you're using now. If people open Orbit elsewhere, set <a class="text-primary hover:underline" href="/settings">Settings → Public URL</a> first.</p>
 					{/if}
 				</div>
 				<div class="grid gap-4 sm:grid-cols-2">
@@ -267,7 +267,7 @@
 					</div>
 				</div>
 				<p class="flex items-start gap-2 rounded-lg bg-surface px-3 py-2 text-xs text-muted-foreground">
-					<CircleAlert class="mt-px size-3.5 shrink-0" />Make sure the proxy strips these headers from incoming requests, and that cc·modern's port is only reachable through the proxy.
+					<CircleAlert class="mt-px size-3.5 shrink-0" />Make sure the proxy strips these headers from incoming requests, and that Orbit's port is only reachable through the proxy.
 				</p>
 			{/if}
 		</section>

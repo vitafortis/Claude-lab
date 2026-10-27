@@ -139,7 +139,7 @@ export async function finishSignIn(params: URLSearchParams, cookieState: string 
 	if (claims.email_verified === false) throw new BadRequest(`${email} is not verified with the provider`);
 	const groups = claimList(claim(id, s.oidc.groupsClaim) ?? claim(info, s.oidc.groupsClaim));
 	const { allowed, admin } = accessFor(s.access, email, groups);
-	if (!allowed) throw new BadRequest(`${email} isn't allowed to sign in to cc·modern. An admin can allow it under Settings → Sign-in.`);
+	if (!allowed) throw new BadRequest(`${email} isn't allowed to sign in to Orbit. An admin can allow it under Settings → Sign-in.`);
 	const name = typeof claims.name === 'string' ? claims.name : typeof claims.preferred_username === 'string' ? claims.preferred_username : null;
 	return { user: upsertExternalUser({ email, name, source: 'oidc', admin }), next: p.next };
 }

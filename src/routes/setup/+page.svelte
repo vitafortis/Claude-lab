@@ -14,10 +14,10 @@
 	}
 </script>
 
-<svelte:head><title>Set up · cc·modern</title></svelte:head>
+<svelte:head><title>Set up · Orbit</title></svelte:head>
 
 <AuthCard
-	title="Set up cc·modern"
+	title="Set up Orbit"
 	subtitle="Create the account that signs in to this console. Next, connect Claude and GitHub."
 	cta="Create account"
 	confirm

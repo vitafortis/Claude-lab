@@ -153,7 +153,7 @@ async function moveToStarted(teamId: string, issue: LinearIssue) {
 	if (started) await gql('mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: { stateId: $state }) { success } }', { id: issue.id, state: started.id });
 }
 
-/** The address of cc·modern for links in comments: Settings, or the last one a browser used. */
+/** The address of Orbit for links in comments: Settings, or the last one a browser used. */
 export function publicUrl(): string | null {
 	return getSettings().publicUrl || getKv<string | null>('origin:last', null);
 }
@@ -199,7 +199,7 @@ async function spawn(rule: LinearRule, issue: LinearIssue) {
 	if (rule.comment) {
 		const base = publicUrl();
 		const where = base ? `[${session.name}](${base}/s/${session.id})` : `“${session.name}”`;
-		await comment(issue.id, `🤖 ${AGENT_LABEL[getAccount(accountId)?.agent ?? 'claude']} started on this in cc·modern: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
+		await comment(issue.id, `🤖 ${AGENT_LABEL[getAccount(accountId)?.agent ?? 'claude']} started on this in Orbit: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
 	}
 	if (notes.length) console.warn(`[cc-modern] Linear ${issue.identifier}: ${notes.join('; ')}`);
 }

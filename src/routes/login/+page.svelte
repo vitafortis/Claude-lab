@@ -28,7 +28,7 @@
 	}
 </script>
 
-<svelte:head><title>Sign in · cc·modern</title></svelte:head>
+<svelte:head><title>Sign in · Orbit</title></svelte:head>
 
 {#snippet ssoButtons()}
 	<a class="btn btn-primary h-9 w-full" href="/api/auth/oidc/start?next={encodeURIComponent(next)}" data-sveltekit-reload
@@ -46,6 +46,6 @@
 	form={data.passwordForm}
 	sso={data.sso ? ssoButtons : undefined}
 	error={data.error}
-	hint={data.proxy && !data.sso ? 'Signed in at your reverse proxy? Open cc·modern through it.' : undefined}
+	hint={data.proxy && !data.sso ? 'Signed in at your reverse proxy? Open Orbit through it.' : undefined}
 	onsubmit={login}
 />

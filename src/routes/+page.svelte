@@ -30,7 +30,7 @@
 	});
 </script>
 
-<svelte:head><title>Sessions · cc·modern</title></svelte:head>
+<svelte:head><title>Sessions · Orbit</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="Sessions" {description}>
@@ -59,10 +59,10 @@
 		{#if stopped.length}
 			<section>
 				<h2 class="mb-2.5 px-1 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">Stopped · {plural(stopped.length, 'session')}</h2>
-				<div class="card divide-y divide-border overflow-hidden">
+				<div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
 					{#each stopped as s (s.id)}
 						{@const sum = sessions.live[s.id]?.summary}
-						<div class="flex items-center gap-3 px-4 py-3">
+						<div class="card glow glow-gray flex items-center gap-3 px-4 py-3">
 							<StateDot state="stopped" />
 							<a href="/s/{s.id}" class="min-w-0 flex-1">
 								<span class="block truncate text-[0.8125rem] font-medium hover:text-primary">{s.name}</span>

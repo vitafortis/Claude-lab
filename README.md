@@ -2,7 +2,7 @@
   <img src="docs/logo.svg" width="64" height="64" alt="" />
 </p>
 
-<h1 align="center">cc·modern</h1>
+<h1 align="center">Orbit</h1>
 
 <p align="center">
   Claude Code sessions on your own hardware.<br />
@@ -13,16 +13,16 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/overview.png" alt="cc·modern sessions overview" />
+  <img src="docs/screenshots/overview.png" alt="Orbit sessions overview" />
 </p>
 
 ## Features
 
-- **One container per session**: cc·modern clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
+- **One container per session**: Orbit clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
 - **Terminals in the browser**: open any session as a full terminal (xterm.js over a WebSocket). Claude runs inside tmux, so closing the tab doesn't stop it, and several browsers can watch the same session. A **Shell** tab opens a second terminal in the same container. You type straight into the terminal, and scroll it with the wheel or a finger; on phones, a key bar adds Esc, Tab, ⇧Tab, arrows, Ctrl+C, End and Enter. When the agent asks something (a permission prompt, a question with options), the options show above the terminal as buttons. Links on screen, even long sign-in links that wrap over many lines, show above the terminal with Open and Copy buttons.
 - **Live overview**: every session shows whether Claude is *working*, *needs you* (a permission prompt or question), is *idle*, or has exited, plus the last prompt and reply, the task list, the tool it's running, git changes and the last lines of its screen. Sessions that need you sort to the top and get a quick-reply box. **Summarize** asks a small model for a three-sentence summary, using the session's own Claude account.
 - **Stop, resume, relaunch**: stopping removes the container and keeps everything else. Starting again picks up the newest conversation (`claude --continue`); you can also resume any earlier conversation or start a fresh one, and restart Claude inside a running session.
-- **Linear automations**: connect Linear and add rules like *issues in ENG labelled `claude` start a session on owner/repo*. Each new issue gets its own session, on Linear's branch name for it (so the pull request links back), with the issue as the first message. cc·modern moves the issue to In Progress, comments with a link to the session, and comments again with the PR once Claude opens one. It polls Linear every minute, so nothing on your network has to be reachable from outside.
+- **Linear automations**: connect Linear and add rules like *issues in ENG labelled `claude` start a session on owner/repo*. Each new issue gets its own session, on Linear's branch name for it (so the pull request links back), with the issue as the first message. Orbit moves the issue to In Progress, comments with a link to the session, and comments again with the PR once Claude opens one. It polls Linear every minute, so nothing on your network has to be reachable from outside.
 - **Skill sessions**: start a session from a skill or slash command instead of a message: `/code-review 234` on a pull request, `/security-review`, `/simplify`, or the account's own skills. Pick a pull request and the session checks out its branch (or `pull/<n>/head` for a fork). **Review a PR** on the overview starts one in two clicks, and **Session → Run a skill** sends one to a running session.
 - **Pull requests**: when a session's branch has a pull request, its number and state (open, draft, merged, closed) show on the card and link to GitHub.
 - **Remote Control**: sessions on a Claude subscription start with `--remote-control "<name>"`, so they also show up at claude.ai/code and in the Claude app, under the session's name. The overview links straight to them.
@@ -101,9 +101,9 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 ### Requirements
 
 - Docker Engine **26 or newer** (sessions mount parts of the `cc-modern-sessions` volume by subpath). On older engines, bind-mount a host folder at `/sessions` and set `CCM_SESSIONS_HOST_PATH` to it.
-- The Docker socket. cc·modern creates, starts and stops session containers, so it needs the real socket, not a read-only proxy.
+- The Docker socket. Orbit creates, starts and stops session containers, so it needs the real socket, not a read-only proxy.
 
-> **Security.** Whoever can sign in to cc·modern can run code on the Docker host (that is the point of it). Keep it on your LAN or behind a VPN or an authenticating reverse proxy, and use a strong password.
+> **Security.** Whoever can sign in to Orbit can run code on the Docker host (that is the point of it). Keep it on your LAN or behind a VPN or an authenticating reverse proxy, and use a strong password.
 
 ## Sign-in
 
@@ -111,8 +111,8 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 
 - **Password**: the local admin's email and password. The form can be hidden once SSO works; `/login?local` still shows it.
 - **Single sign-on (OpenID Connect)**: a *Sign in with…* button for Authentik, Authelia, Keycloak, Pocket ID, Zitadel, Google, Entra ID and others. Create a confidential web client at your provider with the redirect URI shown on the page (`https://<cc-modern>/api/auth/oidc/callback`), then enter the issuer URL (**Test** checks it), client ID and secret. It uses the authorization code flow with PKCE. Groups come from the `groups` claim, or another one you name (`realm_access.roles` for Keycloak).
-- **Reverse proxy headers (forward auth)**: when Authelia, Authentik's proxy outpost, oauth2-proxy, Tailscale and the like sign people in in front of cc·modern, it trusts `Remote-Email`, `Remote-Name` and `Remote-Groups` (names configurable), but only from the proxy addresses you list (Docker's and LAN ranges by default). Make sure the proxy strips those headers from incoming requests and that port 3050 isn't reachable around it. Set the proxy's logout URL so **Sign out** ends that session too.
-- **Off**: anyone who can reach cc·modern uses it as the admin. Only for a proxy that already signs people in, on a network you trust. `CCM_AUTH=disabled` on the container does the same and overrides the UI (for recovery).
+- **Reverse proxy headers (forward auth)**: when Authelia, Authentik's proxy outpost, oauth2-proxy, Tailscale and the like sign people in in front of Orbit, it trusts `Remote-Email`, `Remote-Name` and `Remote-Groups` (names configurable), but only from the proxy addresses you list (Docker's and LAN ranges by default). Make sure the proxy strips those headers from incoming requests and that port 3050 isn't reachable around it. Set the proxy's logout URL so **Sign out** ends that session too.
+- **Off**: anyone who can reach Orbit uses it as the admin. Only for a proxy that already signs people in, on a network you trust. `CCM_AUTH=disabled` on the container does the same and overrides the UI (for recovery).
 
 **Who gets in**: SSO and proxy users can be limited to emails, `@domains` or groups, and emails or groups can be made admins. With no rules, everyone your provider lets through gets in. People appear under **Users** the first time they sign in; a local account with the same email becomes that account.
 
@@ -123,7 +123,7 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 ## How it works
 
 ```
- browser ──HTTP/SSE──▶ cc·modern ──Docker API──▶ session container (one per session)
+ browser ──HTTP/SSE──▶ Orbit ──Docker API──▶ session container (one per session)
     │                   (SvelteKit)                 tini → tmux "main" → claude --name … --remote-control …
     └──WebSocket──────▶ terminal bridge ──docker exec -it──▶ tmux attach   (or bash, for the Shell tab)
 ```
@@ -142,7 +142,7 @@ Everything a session needs survives its container, in the `cc-modern-sessions` v
 | `accounts/<account>/` | `/claude` (`CLAUDE_CONFIG_DIR`), `/codex` (`CODEX_HOME`) or `/gemini` (`GEMINI_CLI_HOME`) | The account's login, settings, memory and conversations (and a Vertex service account key). Shared by the account's sessions. |
 | `sessions/<id>/home/` | `/session/home` (`$HOME`) | The session's home folder: shell history, caches, tool configs. |
 | `sessions/<id>/repo/` | `/workspace/<repo>` (Codex and Gemini: `/workspace/<id>/<repo>`) | The cloned repository, with your uncommitted work. |
-| `sessions/<id>/.ccm/` | `/session/.ccm` | Launch settings and the last AI summary, written by cc·modern. |
+| `sessions/<id>/.ccm/` | `/session/.ccm` | Launch settings and the last AI summary, written by Orbit. |
 
 Conversations are stored per session (`CLAUDE_CODE_PROJECT_DIR_NAME` is the session id), so two sessions on the same repo never mix their history. Codex and Gemini keep conversations by working directory, so their sessions get a working directory of their own. Deleting a session removes its folder and its Claude conversations; deleting an account removes its folder.
 
@@ -170,7 +170,7 @@ Claude Code only runs Claude models, so OpenAI and Google models run through the
 
 Remote Control needs a full claude.ai login; Claude Code refuses it for tokens, API keys and cloud providers. The first time a subscription session starts with Remote Control, Claude Code asks you to confirm it once: answer in the session's terminal.
 
-**Check** makes sure an account works: `claude auth status` for Anthropic accounts, a one-line request with a small model for cloud and gateway accounts, `codex login status` for ChatGPT, the sign-in files for Google, and a model listing for OpenAI and Gemini keys (free, but it needs cc·modern itself to reach api.openai.com or generativelanguage.googleapis.com).
+**Check** makes sure an account works: `claude auth status` for Anthropic accounts, a one-line request with a small model for cloud and gateway accounts, `codex login status` for ChatGPT, the sign-in files for Google, and a model listing for OpenAI and Gemini keys (free, but it needs Orbit itself to reach api.openai.com or generativelanguage.googleapis.com).
 
 Every session of an account shares that account's configuration, as sessions on one machine share `~/.claude`. Settings you change in one session (`/config`, MCP servers, memory) apply to the others.
 
@@ -192,7 +192,7 @@ They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vita
 
 ## GitHub
 
-Add a **fine-grained token** with access to the repos you want (*Contents* and *Pull requests*: read and write; add *Workflows* to push workflow changes), or a **classic token** with `repo`, `read:org` and `workflow`. cc·modern lists every repository the token can see, grouped by owner, so organizations show up as filters in the repo picker.
+Add a **fine-grained token** with access to the repos you want (*Contents* and *Pull requests*: read and write; add *Workflows* to push workflow changes), or a **classic token** with `repo`, `read:org` and `workflow`. Orbit lists every repository the token can see, grouped by owner, so organizations show up as filters in the repo picker.
 
 **Sign in with GitHub** appears once **Settings → GitHub OAuth app** names an OAuth app of yours with *Enable Device Flow* checked (GitHub → Settings → Developer settings → OAuth Apps). No client secret or callback URL is needed.
 
@@ -204,7 +204,7 @@ In a session, git and `gh` sign in as the session's GitHub account without furth
 2. **Add rule**: pick the team, the label that hands an issue over (default `claude`), the repository, a profile or the model account, the GitHub account and the permission mode. The first message is a template with `{identifier}`, `{title}`, `{description}`, `{url}` and `{branch}`. Start it with a skill (`/my-skill {identifier}`) to run one.
 3. Label an issue. Within a minute (or on **Check now**) a session starts on Linear's branch name for the issue, the issue moves to In Progress, and a comment links to the session. When Claude opens the pull request, a second comment links to it, and Linear's GitHub integration links the PR to the issue through the branch name and "Fixes ENG-123".
 
-Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open cc·modern at.
+Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open Orbit at.
 
 ## Sessions
 
@@ -264,4 +264,4 @@ Built with SvelteKit, Tailwind CSS and xterm.js, in the same style as [pg·moder
 
 [Apache 2.0](LICENSE): use, modify and redistribute it, commercially or not, keeping the license and [NOTICE](NOTICE). Contributions are accepted under the same license.
 
-cc·modern is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners. Brand logos come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) and only identify each service.
+Orbit is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners. Brand logos come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) and only identify each service.

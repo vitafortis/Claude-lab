@@ -12,10 +12,27 @@ export const STATE_META: Record<DisplayState, { label: string; dot: string; badg
 	error: { label: 'Error', dot: 'bg-danger', badge: 'badge-danger' }
 };
 
-/** The glow around a session's card (and, inset, its terminal): only states worth a look glow. */
-export function glowClass(state: DisplayState, inset = false): string {
-	if (state === 'working' || state === 'waiting') return `glow-${state}${inset ? '-inset' : ''}`;
-	return state === 'error' && !inset ? 'glow-error' : '';
+/**
+ * The glow around a session (its card, and inset its terminal): green while it runs, breathing
+ * while the agent works; yellow pulsing when it needs you; red on an error; gray when it's
+ * stopped, or `connected` is false (its terminal lost the container).
+ */
+export function glowClass(state: DisplayState, opts: { inset?: boolean; connected?: boolean } = {}): string {
+	const base = opts.inset ? 'glow-inset' : 'glow';
+	if (opts.connected === false) return `${base} glow-gray`;
+	switch (state) {
+		case 'working':
+		case 'starting':
+			return `${base} glow-green glow-breathe`;
+		case 'idle':
+			return `${base} glow-green`;
+		case 'waiting':
+			return `${base} glow-yellow glow-pulse`;
+		case 'error':
+			return `${base} glow-red`;
+		default:
+			return `${base} glow-gray`;
+	}
 }
 
 /** One state for dots and badges, from the stored status and what the terminal shows. */

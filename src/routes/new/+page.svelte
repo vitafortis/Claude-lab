@@ -241,7 +241,7 @@
 	}
 </script>
 
-<svelte:head><title>New session · cc·modern</title></svelte:head>
+<svelte:head><title>New session · Orbit</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="New session" description="Clone a repo into its own container and start Claude Code, Codex or Gemini there." />

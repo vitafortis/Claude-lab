@@ -42,7 +42,7 @@
 	}
 </script>
 
-<article class="card flex min-w-0 flex-col overflow-hidden transition-shadow hover:shadow-surface-lg {glowClass(view)}">
+<article class="card flex min-w-0 flex-col overflow-hidden {glowClass(view)}">
 	<header class="flex items-start gap-3 px-4 pt-4">
 		<StateDot state={view} class="mt-1.5" />
 		<div class="min-w-0 flex-1">

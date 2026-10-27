@@ -1,4 +1,4 @@
-# cc·modern — Claude Code sessions on your own hardware.
+# Orbit (images named cc-modern) — Claude Code sessions on your own hardware.
 #
 #   docker compose up -d
 #   open http://<this-host>:3050 and create the local admin account
@@ -28,8 +28,8 @@ services:
       # Session data: each session's repo and home folder, and each model account's
       # login and conversations. Session containers mount their part of this volume.
       - cc-modern-sessions:/sessions
-      # cc·modern creates, starts and stops the session containers. Anyone who can sign
-      # in to cc·modern can run code on this Docker host: keep it on your LAN, a VPN, or
+      # Orbit creates, starts and stops the session containers. Anyone who can sign
+      # in to Orbit can run code on this Docker host: keep it on your LAN, a VPN, or
       # behind your reverse proxy's sign-in.
       - /var/run/docker.sock:/var/run/docker.sock
 

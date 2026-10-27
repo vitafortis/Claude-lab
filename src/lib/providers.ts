@@ -1,5 +1,5 @@
 /**
- * The kinds of model account cc·modern can run sessions with. Each kind belongs to an agent
+ * The kinds of model account Orbit can run sessions with. Each kind belongs to an agent
  * (the CLI that runs in the session's terminal) and declares the fields its form asks for.
  * Secret fields are stored encrypted and never sent back to the browser.
  *

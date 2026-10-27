@@ -124,7 +124,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>cc·modern</title>
+	<title>Orbit</title>
 </svelte:head>
 
 <svelte:window {onkeydown} />
@@ -134,7 +134,7 @@
 		<a href="/" class="flex items-center gap-2.5">
 			<Logo size={26} />
 			{#if !compact}
-				<span class="text-[0.9375rem] font-semibold tracking-tight">cc<span class="text-primary">·</span>modern</span>
+				<span class="text-[0.9375rem] font-semibold tracking-tight">Orbit</span>
 			{/if}
 		</a>
 		{#if drawer}
@@ -235,7 +235,7 @@
 			{#if theme.value === 'dark'}<Sun />{:else}<Moon />{/if}
 		</button>
 		{#if !compact}
-			<span class="ml-1 truncate font-mono text-[0.6875rem] text-muted-foreground/70" title="cc·modern version">v{data.version}</span>
+			<span class="ml-1 truncate font-mono text-[0.6875rem] text-muted-foreground/70" title="Orbit version">v{data.version}</span>
 		{/if}
 		{#if data.auth === 'authenticated'}
 			<button class="btn btn-ghost btn-icon btn-sm {compact ? '' : 'ml-auto'}" title="Sign out" onclick={logout}><LogOut /></button>
@@ -261,7 +261,7 @@
 		<div class="flex min-w-0 flex-1 flex-col">
 			<header class="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 md:hidden">
 				<button class="btn btn-ghost btn-icon btn-sm" aria-label="Menu" onclick={() => (drawer = true)}><Menu /></button>
-				<a href="/" class="flex items-center gap-2"><Logo size={22} /><span class="text-sm font-semibold tracking-tight">cc<span class="text-primary">·</span>modern</span></a>
+				<a href="/" class="flex items-center gap-2"><Logo size={22} /><span class="text-sm font-semibold tracking-tight">Orbit</span></a>
 				<a href="/new" class="btn btn-ghost btn-icon btn-sm ml-auto" aria-label="New session"><Plus /></a>
 			</header>
 			<main class="relative min-h-0 min-w-0 flex-1 overflow-hidden">

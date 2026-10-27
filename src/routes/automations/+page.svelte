@@ -172,7 +172,7 @@
 	const ruleName = (id: string) => data.rules.find((r) => r.id === id)?.name ?? '';
 </script>
 
-<svelte:head><title>Automations · cc·modern</title></svelte:head>
+<svelte:head><title>Automations · Orbit</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="Automations" description="Start sessions from Linear issues: label an issue, and an agent picks it up on its own branch." />
@@ -187,7 +187,7 @@
 						<p class="text-xs text-muted-foreground">Connected to <b class="font-medium text-foreground">{data.linear.organization}</b> as {data.linear.viewer}. Rules are checked every minute.</p>
 					{:else}
 						<p class="text-xs text-muted-foreground">
-							Paste a personal API key (Linear → Settings → Security &amp; access → Personal API keys). cc·modern asks Linear for new issues every minute, so nothing on your network has to be reachable
+							Paste a personal API key (Linear → Settings → Security &amp; access → Personal API keys). Orbit asks Linear for new issues every minute, so nothing on your network has to be reachable
 							from outside.
 						</p>
 					{/if}

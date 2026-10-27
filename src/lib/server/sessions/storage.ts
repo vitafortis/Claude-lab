@@ -5,9 +5,9 @@
  *                                           account's sessions: login, settings, transcripts
  *   <sessionsDir>/sessions/<id>/home/       the session's $HOME
  *   <sessionsDir>/sessions/<id>/repo/       the cloned repository
- *   <sessionsDir>/sessions/<id>/.ccm/       launch.json and other notes from cc·modern
+ *   <sessionsDir>/sessions/<id>/.ccm/       launch.json and other notes from Orbit
  *
- * cc·modern sees this folder at sessionsDir; session containers get the parts they need,
+ * Orbit sees this folder at sessionsDir; session containers get the parts they need,
  * from the same Docker volume (by subpath) or host folder that backs sessionsDir.
  */
 import { chownSync, existsSync, mkdirSync } from 'node:fs';
@@ -30,7 +30,7 @@ export async function backing(): Promise<Backing> {
 		const self = config.selfContainer ?? hostname();
 		const info = await inspectContainer(self);
 		if (!info) {
-			throw new Error(`Can't find cc·modern's own container ("${self}"). Set CCM_SELF_CONTAINER, or CCM_SESSIONS_VOLUME / CCM_SESSIONS_HOST_PATH.`);
+			throw new Error(`Can't find Orbit's own container ("${self}"). Set CCM_SELF_CONTAINER, or CCM_SESSIONS_VOLUME / CCM_SESSIONS_HOST_PATH.`);
 		}
 		const m = info.Mounts.find((m) => m.Destination === config.sessionsDir);
 		if (!m) throw new Error(`Nothing is mounted at ${config.sessionsDir}. Mount a volume there (see compose.yaml).`);
