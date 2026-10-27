@@ -23,6 +23,15 @@
 	let conn = $state<'connecting' | 'open' | 'closed'>('connecting');
 	let reason = $state('');
 
+	// ?debug=input on the page records what the keyboard does and what is sent, to copy into a
+	// bug report: phone keyboards behave differently from desktop ones and from emulators.
+	let inputLog = $state<string[] | null>(null);
+	const note = (line: string) => {
+		if (!inputLog) return;
+		inputLog.push(`${(performance.now() / 1000).toFixed(3)} ${line}`);
+		if (inputLog.length > 400) inputLog.shift();
+	};
+
 	// The terminal stays dark in both themes; colours tuned for Claude Code's dark theme.
 	const PALETTE = {
 		foreground: '#e6e8ee',
@@ -118,7 +127,22 @@
 				return true;
 			});
 
+			if (new URLSearchParams(location.search).get('debug') === 'input' && term.textarea) {
+				inputLog = [`${navigator.userAgent} · ${term.cols}x${term.rows}`];
+				const ta = term.textarea;
+				const show = (v: string | null | undefined) => JSON.stringify(v ?? null);
+				for (const type of ['keydown', 'keyup', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'focus', 'blur'] as const) {
+					ta.addEventListener(type, (e) => {
+						const extra =
+							e instanceof KeyboardEvent ? `key=${show(e.key)} code=${e.keyCode}` : e instanceof InputEvent ? `${e.inputType} data=${show(e.data)}` : e instanceof CompositionEvent ? `data=${show(e.data)}` : '';
+						note(`${type} ${extra} value=${show(ta.value)}`);
+					}, true);
+				}
+				term.onResize(({ cols, rows }) => note(`resize ${cols}x${rows}`));
+			}
+
 			const raw = (data: string) => {
+				note(`sent ${JSON.stringify(data)}`);
 				if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'i', d: data }));
 			};
 
@@ -313,6 +337,14 @@
 	<div class="absolute inset-0 py-1.5 pl-2 transition-opacity duration-300 {conn === 'closed' ? 'opacity-45' : ''}">
 		<div bind:this={host} class="h-full w-full"></div>
 	</div>
+	{#if inputLog}
+		<button
+			type="button"
+			class="absolute top-2 right-2 z-20 rounded-full border border-term-edge bg-term-chrome/90 px-3 py-1 text-xs text-[#c9cfda]"
+			onpointerdown={(e) => e.preventDefault()}
+			onclick={() => copyText(inputLog!.join('\n'), 'Input log copied')}>Copy input log · {inputLog.length}</button
+		>
+	{/if}
 	{#if conn !== 'open'}
 		<div class="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
 			<span class="flex items-center gap-2 rounded-full border border-term-edge bg-term-chrome/90 px-3 py-1 text-xs text-[#c9cfda] shadow-surface-lg backdrop-blur">
