@@ -46,7 +46,7 @@
 	import { displayState } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
-	import { PERMISSION_MODES, type Conversation, type Session, type SkillOption } from '#lib/types.ts';
+	import { PERMISSION_MODES, type Conversation, type Session, type SessionLive, type SkillOption } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -55,8 +55,19 @@
 	const live = $derived(sessions.live[s.id]);
 	const view = $derived(displayState(s, live));
 	const running = $derived(s.status === 'running');
-	const sum = $derived(live?.summary ?? null);
-	const git = $derived(live?.git ?? null);
+	// The panel keeps the last summary and git state it had for this session: an update that
+	// briefly lacks them would otherwise drop sections and make everything below jump.
+	let kept = { id: '', sum: null as SessionLive['summary'], git: null as SessionLive['git'] };
+	const sum = $derived.by(() => {
+		if (kept.id !== s.id) kept = { id: s.id, sum: null, git: null };
+		if (live?.summary) kept.sum = live.summary;
+		return live?.summary ?? kept.sum;
+	});
+	const git = $derived.by(() => {
+		if (kept.id !== s.id) kept = { id: s.id, sum: null, git: null };
+		if (live?.git) kept.git = live.git;
+		return live?.git ?? kept.git;
+	});
 	const account = $derived(data.accounts.find((a) => a.id === s.accountId));
 	const rcAvailable = $derived(!!account && !!ACCOUNT_KINDS[account.kind].remoteControl);
 	const isClaude = $derived(s.agent === 'claude');
@@ -379,7 +390,7 @@
 				{#if isClaude}
 					<section class="border-b border-border p-4">
 						<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><History class="size-3.5" />Conversations</h2>
-						<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} onresume={resume} />
+						<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} updated={sum?.updatedAt} onresume={resume} />
 					</section>
 				{/if}
 

@@ -13,7 +13,7 @@ import { refreshGithubCredentials } from './sessions/github.ts';
 const API = 'https://api.github.com';
 
 /** A GitHub REST call, with the account's token or anonymously (public repos). */
-function ghFetch(token: string | undefined, path: string): Promise<Response> {
+async function ghFetch(token: string | undefined, path: string): Promise<Response> {
 	return fetch(`${API}${path}`, {
 		headers: {
 			accept: 'application/vnd.github+json',
@@ -22,6 +22,9 @@ function ghFetch(token: string | undefined, path: string): Promise<Response> {
 			'user-agent': 'cc-modern'
 		},
 		signal: AbortSignal.timeout(15_000)
+	}).catch((err: unknown) => {
+		const why = err instanceof Error ? ((err.cause as Error | undefined)?.message ?? err.message) : String(err);
+		throw new BadRequest(`Couldn't reach GitHub (${why}). Check this server's network or proxy.`);
 	});
 }
 

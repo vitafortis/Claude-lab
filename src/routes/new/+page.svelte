@@ -182,12 +182,12 @@
 <div class="h-full overflow-y-auto">
 	<PageHeader title="New session" description="Clone a repo into its own container and start Claude Code, Codex or Gemini there." />
 
-	<form class="max-w-3xl space-y-5 px-4 pb-12 sm:px-8" onsubmit={submit}>
+	<form class="max-w-3xl space-y-3 px-4 pb-8 sm:px-8" onsubmit={submit}>
 		<div class="grid gap-2 sm:grid-cols-2">
 			{#each [{ value: 'task', icon: ListChecks, title: 'Work on a task', body: 'Start the agent with a message, or at the prompt.' }, { value: 'skill', icon: Wand, title: 'Run a skill', body: 'Start with a skill or command, e.g. /code-review on a pull request.' }] as m (m.value)}
 				<button
 					type="button"
-					class="flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors {mode === m.value ? 'border-primary/60 bg-primary-soft' : 'border-border bg-card hover:bg-accent/40'}"
+					class="flex items-start gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors {mode === m.value ? 'border-primary/60 bg-primary-soft' : 'border-border bg-card hover:bg-accent/40'}"
 					onclick={() => (mode = m.value as 'task' | 'skill')}
 				>
 					<m.icon class="mt-0.5 size-4 shrink-0 {mode === m.value ? 'text-primary' : 'text-muted-foreground'}" />
@@ -200,7 +200,7 @@
 		</div>
 
 		{#if !data.accounts.length}
-			<div class="card flex items-start gap-3 border-warning/40 p-4">
+			<div class="card flex items-start gap-3 border-warning/40 p-3.5">
 				<KeyRound class="mt-0.5 size-4 shrink-0 text-warning" />
 				<div class="text-[0.8125rem]">
 					<p class="font-medium">Connect a model account first</p>
@@ -210,9 +210,9 @@
 			</div>
 		{/if}
 
-		<section class="card space-y-4 p-5">
+		<section class="card space-y-3 p-4">
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Repository</h2>
-			<div class="grid gap-4 sm:grid-cols-[14rem_1fr]">
+			<div class="grid gap-3 sm:grid-cols-[14rem_1fr]">
 				<div>
 					<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
 					<select id="gh" class="input" bind:value={githubAccountId}>
@@ -241,7 +241,7 @@
 					</div>
 				</div>
 			{/if}
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-3 sm:grid-cols-2">
 				<div class={checkoutPr ? 'pointer-events-none opacity-50' : ''}>
 					<label class="label" for="base">Start from branch {#if checkoutPr}<span class="font-normal">(the PR's)</span>{/if}</label>
 					{#if branches.length}
@@ -266,9 +266,9 @@
 			</div>
 		</section>
 
-		<section class="card space-y-4 p-5">
+		<section class="card space-y-3 p-4">
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Session</h2>
-			<div class="grid gap-4 sm:grid-cols-2">
+			<div class="grid gap-3 sm:grid-cols-2">
 				<div>
 					<label class="label" for="name">Name</label>
 					<input id="name" class="input" placeholder="Named after the repo" bind:value={name} oninput={() => (nameTouched = true)} />
@@ -295,7 +295,7 @@
 				</div>
 			</div>
 			{#if data.profiles.length}
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-border bg-surface px-4 py-2.5 text-[0.8125rem]">
+				<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem]">
 					<Layers class="size-4 shrink-0 text-primary" />
 					<label for="profile" class="font-medium">Profile</label>
 					<select id="profile" class="input h-8 w-auto min-w-48 text-xs" bind:value={profileChoice}>
@@ -331,7 +331,7 @@
 						{/each}
 					</div>
 				</div>
-				<div class="grid gap-4 sm:grid-cols-[14rem_1fr]">
+				<div class="grid gap-3 sm:grid-cols-[14rem_1fr]">
 					<div>
 						<label class="label" for="cmd">Command</label>
 						<input id="cmd" class="input font-mono text-[0.8125rem]" placeholder="/code-review" bind:value={command} spellcheck="false" />
@@ -347,10 +347,10 @@
 			{:else}
 				<div>
 					<label class="label" for="prompt">First message <span class="font-normal text-muted-foreground/70">(optional)</span></label>
-					<textarea id="prompt" class="input h-auto min-h-24 py-2 leading-relaxed" rows="4" placeholder="What should {agentName} work on? Leave empty to start at the prompt." bind:value={prompt}></textarea>
+					<textarea id="prompt" class="input h-auto min-h-20 py-2 leading-relaxed" rows="3" placeholder="What should {agentName} work on? Leave empty to start at the prompt." bind:value={prompt}></textarea>
 				</div>
 			{/if}
-			<div class="grid gap-4 sm:grid-cols-[16rem_1fr]">
+			<div class="grid gap-3 sm:grid-cols-[16rem_1fr]">
 				<div>
 					<label class="label" for="model">Model</label>
 					<ModelPicker id="model" bind:value={model} {agent} kind={account?.kind} />
@@ -370,7 +370,7 @@
 					<p class="mt-1.5 text-xs text-muted-foreground">{PERMISSION_MODES.find((m) => m.value === permissionMode)?.hint}</p>
 				</div>
 			</div>
-			<div class="flex items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+			<div class="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
 				<Radio class="mt-0.5 size-4 shrink-0 text-primary" />
 				<div class="min-w-0 flex-1 text-[0.8125rem]">
 					<p class="font-medium">Remote Control</p>

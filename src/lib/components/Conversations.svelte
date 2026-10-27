@@ -8,8 +8,16 @@
 		sessionId,
 		sessionName,
 		current = null,
+		updated = null,
 		onresume
-	}: { sessionId: string; sessionName: string; current?: string | null; onresume: (c: Conversation) => void } = $props();
+	}: {
+		sessionId: string;
+		sessionName: string;
+		current?: string | null;
+		/** When the newest conversation last changed: the list refreshes (in place) after it. */
+		updated?: string | null;
+		onresume: (c: Conversation) => void;
+	} = $props();
 
 	// Conversations started with --name carry the session's name as their title; the first prompt says more.
 	const label = (c: Conversation) => (c.title && c.title !== sessionName ? c.title : (c.firstPrompt ?? c.title ?? 'Untitled'));
@@ -31,12 +39,37 @@
 		list = null;
 		void reload();
 	});
+
+	// Keep the list current as Claude writes, without clearing it: rows update where they are.
+	let lastSeen: string | null | undefined;
+	$effect(() => {
+		const at = updated;
+		if (lastSeen === undefined) {
+			lastSeen = at;
+			return;
+		}
+		if (at === lastSeen) return;
+		lastSeen = at;
+		const t = setTimeout(() => void reload(), 1500);
+		return () => clearTimeout(t);
+	});
 </script>
 
 {#if error}
 	<p class="text-xs text-danger">{error}</p>
 {:else if !list}
-	<p class="flex items-center gap-2 text-xs text-muted-foreground"><LoaderCircle class="size-3.5 animate-spin" />Loading…</p>
+	<!-- Placeholder rows the height of real ones, so the panel doesn't shift when they arrive. -->
+	<ul class="space-y-1" aria-busy="true" aria-label="Loading conversations">
+		{#each [0, 1] as i (i)}
+			<li class="flex items-start gap-2.5 px-2 py-2">
+				<LoaderCircle class="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+				<div class="min-w-0 flex-1 space-y-1.5 py-0.5">
+					<div class="h-3 w-3/4 rounded bg-muted"></div>
+					<div class="h-2.5 w-1/2 rounded bg-muted/70"></div>
+				</div>
+			</li>
+		{/each}
+	</ul>
 {:else if !list.length}
 	<p class="text-xs text-muted-foreground">No saved conversations yet.</p>
 {:else}

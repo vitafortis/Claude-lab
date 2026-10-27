@@ -16,6 +16,7 @@ import { sweepLogins } from '../accounts.ts';
 import type { GitState, Session, SessionLive } from '#lib/types.ts';
 
 const FAST_MS = 2500;
+const lastSummary = new Map<string, NonNullable<SessionLive['summary']>>();
 const SLOW_MS = 15_000;
 // git status on every fifth probe; it's the slow part on big repos.
 const GIT_EVERY = 5;
@@ -64,7 +65,11 @@ async function pollOnce() {
 			try {
 				// Transcripts are Claude Code's; Codex and Gemini show their state on screen.
 				if (s.agent === 'claude') summary = latestSummary(s);
-			} catch {}
+				if (summary) lastSummary.set(s.id, summary);
+			} catch {
+				// Read while Claude was writing it: keep the last good one, or the panel jumps.
+				summary = lastSummary.get(s.id) ?? null;
+			}
 			return { id: s.id, status: s.status, ...p, summary, aiSummary: readAiSummary(s.id), at: new Date().toISOString() };
 		})
 	);

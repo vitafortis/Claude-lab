@@ -129,7 +129,7 @@
 		<Search class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
 		<input
 			class="input pl-9 font-mono text-[0.8125rem]"
-			placeholder={account ? `Search ${account.label ?? account.login}'s repositories, type owner/ to list an org's, or paste a URL` : 'owner/name or https://… git URL'}
+			placeholder={account ? 'Search repos, owner/ for an org, or paste a URL' : 'owner/name or https://… git URL'}
 			bind:value
 			autocomplete="off"
 			spellcheck="false"
