@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowRight, CircleAlert, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Wrench } from '@lucide/svelte';
+	import { ArrowRight, ChevronDown, CircleAlert, GitBranch, ListTodo, LoaderCircle, Play, Send, Sparkles, Square, Trash2, Wrench } from '@lucide/svelte';
 	import StateBadge from './StateBadge.svelte';
 	import BrandIcon from './BrandIcon.svelte';
 	import SessionTags from './SessionTags.svelte';
@@ -7,7 +7,8 @@
 	import QuestionBar from './QuestionBar.svelte';
 	import { findQuestion } from '#lib/pane.ts';
 	import { ago } from '#lib/client/format.ts';
-	import { sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
+	import { deleteSession, sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
+	import Menu from './Menu.svelte';
 	import { AGENT_LABEL } from '#lib/providers.ts';
 	import { displayState, glowClass } from '#lib/session-state.ts';
 	import type { Session, SessionLive } from '#lib/types.ts';
@@ -34,6 +35,12 @@
 		if (await sendToSession(s, { text: reply, enter: true })) reply = '';
 		busy = false;
 	}
+
+	// End: stop (repo and conversations stay) or delete it outright; a failed session has nothing to stop.
+	const endItems = $derived([
+		...(running ? [{ label: 'Stop', hint: 'Keeps the repo and conversations', icon: Square, onclick: () => act(() => stopSession(s)) }] : []),
+		{ label: 'Delete session', hint: 'Its clone, home folder and conversations', icon: Trash2, danger: true, onclick: () => act(() => deleteSession(s, '')) }
+	]);
 
 	async function act(fn: () => Promise<void>) {
 		busy = true;
@@ -115,9 +122,16 @@
 			{#if s.rcUrl && running}
 				<a class="btn btn-ghost btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
 			{/if}
-			{#if running}
-				<button class="btn btn-ghost btn-sm btn-icon" title="Stop" disabled={busy} onclick={() => act(() => stopSession(s))}><Square /></button>
-			{:else if s.status !== 'starting'}
+			{#if running || s.status === 'error'}
+				<Menu items={endItems} side="top">
+					{#snippet trigger({ toggle })}
+						<button class="btn btn-ghost btn-sm" title="Stop or delete this session" disabled={busy} onclick={toggle}>
+							{#if busy}<LoaderCircle class="animate-spin" />{:else}<Square />{/if}End<ChevronDown />
+						</button>
+					{/snippet}
+				</Menu>
+			{/if}
+			{#if !running && s.status !== 'starting'}
 				<button class="btn btn-ghost btn-sm" title="Start and continue the newest conversation" disabled={busy} onclick={() => act(() => startSession(s))}>
 					{#if busy}<LoaderCircle class="animate-spin" />{:else}<Play />{/if}Start
 				</button>

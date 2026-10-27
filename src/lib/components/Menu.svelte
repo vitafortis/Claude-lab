@@ -7,7 +7,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
-	let { items, trigger, align = 'right' }: { items: MenuItem[]; trigger: Snippet<[{ toggle: () => void; open: boolean }]>; align?: 'left' | 'right' } = $props();
+	let {
+		items,
+		trigger,
+		align = 'right',
+		side = 'bottom'
+	}: {
+		items: MenuItem[];
+		trigger: Snippet<[{ toggle: () => void; open: boolean }]>;
+		align?: 'left' | 'right';
+		/** "top" opens upward, for triggers at the bottom of a box that clips (a card's footer). */
+		side?: 'top' | 'bottom';
+	} = $props();
 
 	let open = $state(false);
 	let root: HTMLDivElement;
@@ -22,7 +33,7 @@
 <div class="relative" bind:this={root}>
 	{@render trigger({ toggle: () => (open = !open), open })}
 	{#if open}
-		<div class="absolute top-full z-30 mt-1.5 min-w-56 rounded-xl border border-border bg-card p-1 shadow-surface-lg {align === 'right' ? 'right-0' : 'left-0'}" role="menu">
+		<div class="absolute z-30 {side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} min-w-56 rounded-xl border border-border bg-card p-1 shadow-surface-lg {align === 'right' ? 'right-0' : 'left-0'}" role="menu">
 			{#each items as item, i (i)}
 				{#if item === 'separator'}
 					<div class="my-1 h-px bg-border"></div>
