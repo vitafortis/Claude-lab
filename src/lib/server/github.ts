@@ -6,8 +6,8 @@
 import { randomToken } from './crypto.ts';
 import { config } from './config.ts';
 import { BadRequest } from './http.ts';
-import { getGithubToken, getSettings, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
-import type { GithubAccount, GithubPull, GithubRepo, SessionPr } from '#lib/types.ts';
+import { getGithubToken, getSettings, listGithubAccounts, setGithubOrgs, upsertGithubAccount, type GithubAccountInput } from './store.ts';
+import type { GithubAccount, GithubPull, GithubRepo, SessionPr, TokenAccess } from '#lib/types.ts';
 import { refreshGithubCredentials } from './sessions/github.ts';
 
 const API = 'https://api.github.com';
@@ -48,6 +48,7 @@ type GhRepo = {
 	name: string;
 	owner: { login: string };
 	private: boolean;
+	permissions?: Partial<Record<'admin' | 'maintain' | 'push' | 'triage' | 'pull', boolean>>;
 	default_branch: string;
 	description: string | null;
 	pushed_at: string | null;
@@ -184,26 +185,108 @@ export async function searchRepos(account: GithubAccount, query: string): Promis
 /** One repo by owner/name, or a plain account of why this token can't see it. */
 export async function lookupRepo(account: GithubAccount, fullName: string): Promise<GithubRepo> {
 	if (!FULL_NAME.test(fullName)) throw new BadRequest('Enter the repository as owner/name');
-	const token = getGithubToken(account.id);
-	const res = await ghFetch(token, `/repos/${fullName}`);
+	const res = await ghFetch(getGithubToken(account.id), `/repos/${fullName}`);
 	if (res.ok) return toRepo((await res.json()) as GhRepo);
-	if (res.status === 401) throw new BadRequest('GitHub rejected the token (expired or revoked?)');
+	throw new BadRequest(await missReason(account, fullName, res));
+}
+
+/** Why GitHub didn't return the repository for this token, from what it answered. */
+async function missReason(account: GithubAccount, fullName: string, res: Response): Promise<string> {
+	if (res.status === 401) return 'GitHub rejected the token (expired or revoked?)';
 	const owner = fullName.split('/')[0];
 	const sso = res.headers.get('x-github-sso');
 	const ssoUrl = sso?.match(/url=(\S+)/)?.[1];
-	if (ssoUrl) throw new BadRequest(`${owner} uses single sign-on: authorize this token for it at ${ssoUrl}, then try again.`);
+	if (ssoUrl) return `${owner} uses single sign-on: authorize this token for it at ${ssoUrl}, then try again.`;
 	const message = ((await res.json().catch(() => ({}))) as { message?: string }).message;
-	if (res.status !== 404) throw new BadRequest(`GitHub: ${message ?? res.statusText}`);
+	if (res.status !== 404) return `GitHub: ${message ?? res.statusText}`;
 	// Facts only: what GitHub returned, not a guess at the token's settings.
 	const listed = repoCache.get(account.id)?.list.repos;
 	if (listed?.length && !listed.some((r) => r.private)) {
-		throw new BadRequest(`GitHub answers "Not Found" for ${fullName} with this token, and has listed no private repositories for it anywhere.`);
+		return `GitHub answers "Not Found" for ${fullName} with this token, and has listed no private repositories for it anywhere.`;
 	}
-	throw new BadRequest(
-		token?.startsWith('github_pat_')
-			? `This token can't see ${fullName}. A fine-grained token needs ${owner} as its resource owner, access to this repository (or all of ${owner}'s), and Contents permission; ${owner}'s owners may also have to approve it (${owner} → Settings → Personal access tokens → Pending requests).`
-			: `This token can't see ${fullName}. A classic token needs the repo scope, and the account has to be able to open the repository on github.com.`
+	return getGithubToken(account.id)?.startsWith('github_pat_')
+		? `This token can't see ${fullName}. A fine-grained token needs ${owner} as its resource owner, access to this repository (or all of ${owner}'s), and Contents permission; ${owner}'s owners may also have to approve it (${owner} → Settings → Personal access tokens → Pending requests).`
+		: `This token can't see ${fullName}. A classic token needs the repo scope, and the account has to be able to open the repository on github.com.`;
+}
+
+// ── across every token ─────────────────────────────────────────────────
+
+const tokenKind = (token: string): TokenAccess['kind'] =>
+	token.startsWith('github_pat_') ? 'fine-grained' : token.startsWith('ghp_') ? 'classic' : token.startsWith('gho_') ? 'sign-in' : 'unknown';
+
+const LEVELS = ['read', 'triage', 'write', 'maintain', 'admin'] as const;
+const FROM_GITHUB = { pull: 'read', triage: 'triage', push: 'write', maintain: 'maintain', admin: 'admin' } as const;
+
+/**
+ * The tokens in the order a session should prefer them: those GitHub returns the repository
+ * for; among them, those it reports write access for (sessions push), when any; then the
+ * stricter first: fine-grained tokens (limited to chosen repositories and permissions) before
+ * sign-ins and classic tokens, less access before more, fewer repositories listed before more.
+ */
+export function rankTokens(tokens: TokenAccess[]): TokenAccess[] {
+	const level = (t: TokenAccess) => LEVELS.indexOf(t.access ?? 'read');
+	const writes = (t: TokenAccess) => t.ok && level(t) >= LEVELS.indexOf('write');
+	const anyWrites = tokens.some(writes);
+	const kind = { 'fine-grained': 0, 'sign-in': 1, classic: 2, unknown: 3 };
+	return [...tokens].sort(
+		(a, b) =>
+			Number(b.ok) - Number(a.ok) ||
+			(anyWrites ? Number(writes(b)) - Number(writes(a)) : 0) ||
+			kind[a.kind] - kind[b.kind] ||
+			level(a) - level(b) ||
+			(a.sees?.repos ?? Infinity) - (b.sees?.repos ?? Infinity)
 	);
+}
+
+/** What each token gets for the repository, best first (see rankTokens). */
+export async function repoAccess(fullName: string): Promise<{ repo: GithubRepo | null; tokens: TokenAccess[] }> {
+	if (!FULL_NAME.test(fullName)) throw new BadRequest('Enter the repository as owner/name');
+	let repo: GithubRepo | null = null;
+	const tokens = await Promise.all(
+		listGithubAccounts().map(async (account): Promise<TokenAccess> => {
+			const token = getGithubToken(account.id) ?? '';
+			const base = { accountId: account.id, kind: tokenKind(token), scopes: account.scopes, access: null, expires: null, sees: null, reason: null };
+			const res = await ghFetch(token, `/repos/${fullName}`).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
+			if (typeof res === 'string') return { ...base, ok: false, reason: res };
+			const expires = res.headers.get('github-authentication-token-expiration');
+			const listed = await listRepos(account).catch(() => null);
+			const sees = listed ? { repos: listed.repos.length, private: listed.repos.filter((r) => r.private).length } : null;
+			if (!res.ok) return { ...base, ok: false, expires, sees, reason: await missReason(account, fullName, res) };
+			const data = (await res.json()) as GhRepo;
+			repo ??= toRepo(data);
+			const granted = (Object.keys(FROM_GITHUB) as (keyof typeof FROM_GITHUB)[]).filter((k) => data.permissions?.[k]).map((k) => FROM_GITHUB[k]);
+			const access = granted.length ? LEVELS[Math.max(...granted.map((g) => LEVELS.indexOf(g)))] : null;
+			return { ...base, ok: true, access, expires, sees };
+		})
+	);
+	return { repo, tokens: rankTokens(tokens) };
+}
+
+/** Every token's repositories in one list, most recently pushed first; ?owner and ?search alike. */
+export async function allRepos(how: { owner?: string; search?: string; refresh?: boolean } = {}): Promise<RepoList> {
+	const accounts = listGithubAccounts();
+	const results = await Promise.allSettled(
+		accounts.map(async (a): Promise<RepoList> => {
+			if (how.owner) return { repos: await ownerRepos(a, how.owner), notice: null };
+			if (how.search) return { repos: await searchRepos(a, how.search), notice: null };
+			return listRepos(a, how.refresh);
+		})
+	);
+	const byName = new Map<string, GithubRepo>();
+	const notices = new Set<string>();
+	const errors: string[] = [];
+	for (const r of results) {
+		if (r.status === 'rejected') {
+			errors.push(r.reason instanceof Error ? r.reason.message : String(r.reason));
+			continue;
+		}
+		for (const repo of r.value.repos) if (!byName.has(repo.fullName)) byName.set(repo.fullName, repo);
+		if (r.value.notice) notices.add(r.value.notice);
+	}
+	// Only when no token answered: one token failing shouldn't hide the others' repos.
+	if (accounts.length && errors.length === accounts.length) throw new BadRequest(errors[0]);
+	const repos = [...byName.values()].sort((a, b) => (b.pushedAt ?? '').localeCompare(a.pushedAt ?? ''));
+	return { repos, notice: [...notices].join(' ') || null };
 }
 
 export async function listBranches(account: GithubAccount | null, fullName: string): Promise<string[]> {

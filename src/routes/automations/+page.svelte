@@ -139,8 +139,6 @@
 		);
 	});
 
-	const github = $derived(data.githubAccounts.find((a) => a.id === form.githubAccountId) ?? null);
-
 	async function saveRule(e: SubmitEvent) {
 		e.preventDefault();
 		saving = true;
@@ -307,7 +305,7 @@
 			</div>
 			<div>
 				<span class="label">Start a session on</span>
-				<RepoPicker account={github} bind:value={form.repo} onpick={() => {}} />
+				<RepoPicker logins={[...new Set(data.githubAccounts.map((a) => a.login))]} bind:value={form.repo} onpick={() => {}} />
 			</div>
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2">

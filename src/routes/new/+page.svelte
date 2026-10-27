@@ -16,7 +16,7 @@
 	import { ago, githubLabel } from '#lib/client/format.ts';
 	import { matchProfile } from '#lib/profiles.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES, fitPermissionMode } from '#lib/providers.ts';
-	import { PERMISSION_MODES, type GithubPull, type GithubRepo, type PermissionMode, type Session, type SkillOption } from '#lib/types.ts';
+	import { PERMISSION_MODES, type GithubPull, type GithubRepo, type PermissionMode, type Session, type SkillOption, type TokenAccess } from '#lib/types.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -24,7 +24,6 @@
 	// Form fields start from the loaded values (preferring a signed-in account) and are edited locally.
 	const initial = untrack(() => ({
 		account: (data.accounts.find((a) => a.status === 'signed_in') ?? data.accounts[0])?.id ?? '',
-		github: data.githubAccounts[0]?.id ?? '',
 		settings: data.settings,
 		// /new?mode=skill&command=/code-review&repo=owner/name&pr=12 prefills the form.
 		mode: page.url.searchParams.get('mode') === 'skill' ? ('skill' as const) : ('task' as const),
@@ -40,7 +39,8 @@
 	let pulls = $state<GithubPull[]>([]);
 	let checkoutPr = $state<number | null>(initial.pr);
 	let accountId = $state(initial.account);
-	let githubAccountId = $state(initial.github);
+	// The GitHub token follows the repo: the best one that can open it (see repoAccess), or the one picked.
+	let githubAccountId = $state('');
 	let repo = $state(initial.repo);
 	let picked = $state<GithubRepo | null>(null);
 	let branches = $state<string[]>([]);
@@ -60,6 +60,53 @@
 	const agentName = $derived(agent === 'claude' ? 'Claude' : AGENT_LABEL[agent]);
 	const github = $derived(data.githubAccounts.find((a) => a.id === githubAccountId) ?? null);
 	const parsed = $derived(parseRepo(repo));
+
+	// Which tokens can open the repo: asked of GitHub once the repo is named, each token in turn.
+	let access = $state<{ repo: string; tokens: TokenAccess[] | null; error: string } | null>(null);
+	let tokenPicked = $state(false);
+	let showTokens = $state(false);
+	const usable = $derived(access?.tokens?.filter((t) => t.ok) ?? []);
+	const accessReady = $derived(!parsed?.fullName || !data.githubAccounts.length || (access?.repo === parsed.fullName && !!access.tokens));
+	$effect(() => {
+		const full = parsed?.fullName ?? null;
+		tokenPicked = false;
+		showTokens = false;
+		githubAccountId = '';
+		access = null;
+		if (!full || !data.githubAccounts.length) return;
+		access = { repo: full, tokens: null, error: '' };
+		const ctrl = new AbortController();
+		const t = setTimeout(() => {
+			api.get<{ tokens: TokenAccess[] }>(`/api/github/access?repo=${encodeURIComponent(full)}`, ctrl.signal).then(
+				(r) => {
+					access = { repo: full, tokens: r.tokens, error: '' };
+					const ok = r.tokens.filter((x) => x.ok);
+					const kept = untrack(() => recall().repos?.[full]?.token);
+					const mine = ok.find((x) => x.accountId === kept);
+					githubAccountId = (mine ?? ok[0])?.accountId ?? '';
+					tokenPicked = !!mine && mine !== ok[0];
+				},
+				(err) => {
+					if (!ctrl.signal.aborted) access = { repo: full, tokens: [], error: errorMessage(err) };
+				}
+			);
+		}, 300);
+		return () => {
+			clearTimeout(t);
+			ctrl.abort();
+		};
+	});
+	const ghAccount = (id: string) => data.githubAccounts.find((a) => a.id === id);
+	const KIND_LABEL: Record<TokenAccess['kind'], string> = { 'fine-grained': 'Fine-grained token', classic: 'Classic token', 'sign-in': 'GitHub sign-in', unknown: 'Token' };
+	function facts(t: TokenAccess): string[] {
+		return [
+			KIND_LABEL[t.kind],
+			t.access ? `GitHub reports ${t.access} access` : '',
+			t.kind !== 'fine-grained' && t.scopes ? `scopes: ${t.scopes}` : '',
+			t.sees ? `lists ${t.sees.repos} repo${t.sees.repos === 1 ? '' : 's'} (${t.sees.private} private)` : '',
+			t.expires ? `expires ${t.expires.split(' ')[0]}` : t.kind === 'fine-grained' || t.kind === 'classic' ? 'no expiry reported' : ''
+		].filter(Boolean);
+	}
 	const rcAvailable = $derived(!!account && !!ACCOUNT_KINDS[account.kind].remoteControl);
 	const permissionModes = $derived(PERMISSION_MODES.filter((m) => AGENT_PERMISSION_MODES[agent].includes(m.value)));
 	const AGENTS = ['claude', 'codex', 'gemini'] as const;
@@ -119,7 +166,7 @@
 	$effect(() => {
 		const full = parsed?.fullName;
 		pulls = [];
-		if (!full) return;
+		if (!full || !accessReady) return;
 		const ctrl = new AbortController();
 		const q = new URLSearchParams({ repo: full, ...(github ? { account: github.id } : {}) });
 		api.get<GithubPull[]>(`/api/github/pulls?${q}`, ctrl.signal).then(
@@ -132,7 +179,7 @@
 	$effect(() => {
 		const full = parsed?.fullName;
 		branches = [];
-		if (!full) return;
+		if (!full || !accessReady) return;
 		baseBranch = picked?.fullName === full ? picked.defaultBranch : '';
 		const ctrl = new AbortController();
 		const q = new URLSearchParams({ repo: full, ...(github ? { account: github.id } : {}) });
@@ -168,7 +215,8 @@
 
 	// The last choices, in this browser: a new session starts from them, and from what the
 	// picked repo used last time (a matching profile still wins).
-	type Choices = { github: string; account: string; model: string; permissionMode: PermissionMode; remoteControl: boolean };
+	// `token`: the GitHub token picked by hand for the repo, over the one chosen for it.
+	type Choices = { token?: string; account: string; model: string; permissionMode: PermissionMode; remoteControl: boolean };
 	const MEMORY = 'ccm.newSession';
 	function recall(): { last?: Choices; repos?: Record<string, Choices> } {
 		try {
@@ -178,7 +226,6 @@
 		}
 	}
 	async function applyChoices(c: Choices) {
-		if (c.github === '' || data.githubAccounts.some((a) => a.id === c.github)) githubAccountId = c.github;
 		const acct = data.accounts.find((a) => a.id === c.account);
 		if (!acct) return;
 		accountId = acct.id;
@@ -189,7 +236,7 @@
 		remoteControl = c.remoteControl;
 	}
 	function remember(fullName: string | null) {
-		const c: Choices = { github: githubAccountId, account: accountId, model, permissionMode, remoteControl };
+		const c: Choices = { ...(tokenPicked ? { token: githubAccountId } : {}), account: accountId, model, permissionMode, remoteControl };
 		const m = recall();
 		const repos = { ...(m.repos ?? {}), ...(fullName ? { [fullName]: c } : {}) };
 		const keep = Object.fromEntries(Object.entries(repos).slice(-50));
@@ -276,20 +323,65 @@
 
 		<section class="card space-y-3 p-4">
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Repository</h2>
-			<div class="grid gap-3 sm:grid-cols-[14rem_1fr]">
-				<div>
-					<label class="label flex items-center gap-1.5" for="gh"><BrandIcon brand="github" class="size-3.5" />GitHub account</label>
-					<select id="gh" class="input" bind:value={githubAccountId}>
-						{#each data.githubAccounts as a (a.id)}<option value={a.id}>{githubLabel(a)}</option>{/each}
-						<option value="">None (public repo)</option>
-					</select>
-					{#if !data.githubAccounts.length}<a href="/accounts#github" class="mt-1.5 block text-xs text-primary">Connect GitHub →</a>{/if}
-				</div>
-				<div>
-					<span class="label">Repository</span>
-					<RepoPicker account={github} bind:value={repo} onpick={(r) => (picked = r)} />
-					{#if repo && !parsed}<p class="mt-1.5 text-xs text-danger">Enter owner/name, or an https git URL.</p>{/if}
-				</div>
+			<div>
+				<RepoPicker logins={[...new Set(data.githubAccounts.map((a) => a.login))]} bind:value={repo} onpick={(r) => (picked = r)} />
+				{#if repo && !parsed}<p class="mt-1.5 text-xs text-danger">Enter owner/name, or an https git URL.</p>{/if}
+				{#if !data.githubAccounts.length}
+					<p class="mt-1.5 text-xs text-muted-foreground">Public repos and git URLs only. <a href="/accounts?add=github" class="text-primary hover:underline">Add a GitHub token</a> for private ones and pushing.</p>
+				{:else if access}
+					<div class="mt-2 text-xs">
+						{#if !access.tokens}
+							<p class="flex items-center gap-1.5 text-muted-foreground"><LoaderCircle class="size-3.5 animate-spin" />Checking which GitHub token can open {access.repo}…</p>
+						{:else if access.error}
+							<p class="text-danger">{access.error}</p>
+						{:else if !usable.length}
+							<p class="font-medium text-danger">None of your GitHub tokens can open {access.repo}.</p>
+							<ul class="mt-1 space-y-1">
+								{#each access.tokens as t (t.accountId)}
+									{@const a = ghAccount(t.accountId)}
+									<li class="text-muted-foreground"><span class="font-medium text-foreground">{a ? githubLabel(a) : 'Token'}</span>: {t.reason} <a class="text-primary hover:underline" href="/accounts?check={t.accountId}&repo={encodeURIComponent(access.repo)}#github">What GitHub answers →</a></li>
+								{/each}
+							</ul>
+						{:else}
+							{@const using = access.tokens.find((t) => t.accountId === githubAccountId)}
+							<button type="button" class="flex w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left text-muted-foreground" aria-expanded={showTokens} onclick={() => (showTokens = !showTokens)}>
+								<BrandIcon brand="github" class="size-3.5 shrink-0" />
+								<span>Using <span class="font-medium text-foreground">{github ? githubLabel(github) : 'a token'}</span></span>
+								<span>· {usable.length === 1 ? 'the only token that can open it' : tokenPicked ? 'picked by you' : `stricter of ${usable.length} that can open it`}</span>
+								{#if usable.length > 1 || access.tokens.length > 1}<span class="inline-flex items-center text-primary">{showTokens ? 'Hide' : usable.length > 1 ? 'Change' : 'Details'}<ChevronDown class="size-3.5 transition-transform {showTokens ? 'rotate-180' : ''}" /></span>{/if}
+							</button>
+							{#if !showTokens && using}<p class="mt-0.5 pl-5 text-[0.6875rem] text-muted-foreground/80">{facts(using).join(' · ')}</p>{/if}
+							{#if showTokens}
+								<ul class="mt-2 space-y-1.5">
+									{#each access.tokens as t (t.accountId)}
+										{@const a = ghAccount(t.accountId)}
+										<li>
+											<label class="flex items-start gap-2.5 rounded-lg border px-3 py-2 {t.ok ? 'cursor-pointer' : 'opacity-60'} {t.accountId === githubAccountId ? 'border-primary/60 bg-primary-soft' : 'border-border'}">
+												<input
+													type="radio"
+													name="token"
+													class="mt-0.5"
+													value={t.accountId}
+													disabled={!t.ok}
+													checked={t.accountId === githubAccountId}
+													onchange={() => {
+														githubAccountId = t.accountId;
+														tokenPicked = t.accountId !== usable[0]?.accountId;
+													}}
+												/>
+												<span class="min-w-0 flex-1">
+													<span class="block text-[0.8125rem] font-medium text-foreground">{a ? githubLabel(a) : 'Token'}{#if t === usable[0]}<span class="ml-1.5 badge badge-primary">stricter</span>{/if}</span>
+													<span class="block text-[0.6875rem] text-muted-foreground">{t.ok ? facts(t).join(' · ') : t.reason}</span>
+												</span>
+											</label>
+										</li>
+									{/each}
+								</ul>
+								<p class="mt-1.5 text-[0.6875rem] text-muted-foreground/80">Preferred: tokens GitHub reports write access for (sessions push), then fine-grained before classic, less access before more, fewer repos before more. "Access" is the permissions field GitHub returns for this repo with each token.</p>
+							{/if}
+						{/if}
+					</div>
+				{/if}
 			</div>
 			{#if pulls.length}
 				<div>

@@ -135,3 +135,44 @@ test('checkToken reports which token is stored and what GitHub answers, as is', 
 	assert.equal(r.checks[3].headers['x-accepted-github-permissions'], 'metadata=read');
 	restore();
 });
+
+test('repoAccess asks every token and puts the stricter one that works first', async () => {
+	for (const a of store.listGithubAccounts()) store.deleteGithubAccount(a.id);
+	const classic = store.upsertGithubAccount(input('ghp_wide'), { label: 'Classic' });
+	const fine = store.upsertGithubAccount(input('github_pat_narrow'), { label: 'Fine' });
+	const reader = store.upsertGithubAccount(input('github_pat_reader'), { label: 'Reader' });
+	const none = store.upsertGithubAccount(input('github_pat_none'), { label: 'None' });
+	// Each token gets its own answer, by the authorization header.
+	const real = globalThis.fetch;
+	globalThis.fetch = (async (req: RequestInfo | URL, init?: RequestInit) => {
+		const url = new URL(String(req));
+		const auth = new Headers(init?.headers).get('authorization') ?? '';
+		if (url.pathname !== '/repos/Acme/tier') return Response.json([]);
+		const perms = { ghp_wide: { admin: true, push: true, pull: true }, github_pat_narrow: { push: true, pull: true }, github_pat_reader: { pull: true } }[auth.replace('Bearer ', '')];
+		return perms ? Response.json({ ...repoJson('Acme/tier'), permissions: perms }, { headers: { 'github-authentication-token-expiration': '2027-01-01 00:00:00 UTC' } }) : new Response('{"message":"Not Found"}', { status: 404 });
+	}) as typeof fetch;
+	const r = await github.repoAccess('Acme/tier');
+	globalThis.fetch = real;
+	assert.equal(r.repo?.fullName, 'Acme/tier');
+	// Write access first (sessions push), then fine-grained before classic; the reader and the token that can't see it last.
+	assert.deepEqual(
+		r.tokens.map((t) => [t.accountId, t.ok, t.access]),
+		[
+			[fine.id, true, 'write'],
+			[classic.id, true, 'admin'],
+			[reader.id, true, 'read'],
+			[none.id, false, null]
+		]
+	);
+	assert.equal(r.tokens[0].kind, 'fine-grained');
+	assert.equal(r.tokens[0].expires, '2027-01-01 00:00:00 UTC');
+	assert.match(r.tokens[3].reason ?? '', /fine-grained token needs Acme/);
+});
+
+test('rankTokens prefers the stricter token when none reports write access', () => {
+	const t = (accountId: string, kind: 'fine-grained' | 'classic', repos: number) => ({ accountId, ok: true, access: 'read' as const, kind, scopes: null, expires: null, sees: { repos, private: 0 }, reason: null });
+	assert.deepEqual(
+		github.rankTokens([t('wide', 'fine-grained', 300), t('classic', 'classic', 1), t('narrow', 'fine-grained', 1)]).map((x) => x.accountId),
+		['narrow', 'wide', 'classic']
+	);
+});

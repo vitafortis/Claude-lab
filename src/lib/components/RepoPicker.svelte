@@ -2,14 +2,16 @@
 	import { Building2, Globe, Lock, LoaderCircle, RefreshCw, Search } from '@lucide/svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago } from '#lib/client/format.ts';
-	import type { GithubAccount, GithubRepo } from '#lib/types.ts';
+	import type { GithubRepo } from '#lib/types.ts';
 
+	/** Repos from every GitHub token at once: which token a session uses is worked out per repo. */
 	let {
-		account,
+		logins,
 		value = $bindable(''),
 		onpick
 	}: {
-		account: GithubAccount | null;
+		/** The GitHub logins of the tokens; none means a URL or public owner/name only. */
+		logins: string[];
 		/** What's in the box: owner/name, or any git URL. */
 		value: string;
 		onpick: (repo: GithubRepo | null) => void;
@@ -20,28 +22,27 @@
 	// Found past the list: GitHub's search by name, or the repo typed as owner/name.
 	let found = $state<GithubRepo[]>([]);
 	let searching = $state(false);
-	let lookupError = $state('');
 	let loading = $state(false);
 	let error = $state('');
 	let open = $state(false);
 	let owner = $state<string | null>(null);
 	let index = $state(0);
 
-	// Switching tokens supersedes a list still loading: only the newest request may fill it in,
-	// or a slow answer for the previous token could land under the new one.
+	const enabled = $derived(logins.length > 0);
+
+	// A reload supersedes a list still loading: only the newest request may fill it in.
 	let loadSeq = 0;
 	async function load(refresh = false) {
 		const seq = ++loadSeq;
-		repos = [];
-		notice = null;
 		error = '';
-		if (!account) {
+		if (!enabled) {
+			repos = [];
 			loading = false;
 			return;
 		}
 		loading = true;
 		try {
-			const r = await api.get<{ repos: GithubRepo[]; notice: string | null }>(`/api/github-accounts/${account.id}/repos${refresh ? '?refresh' : ''}`);
+			const r = await api.get<{ repos: GithubRepo[]; notice: string | null }>(`/api/github/repos${refresh ? '?refresh' : ''}`);
 			if (seq !== loadSeq) return;
 			repos = r.repos;
 			notice = r.notice;
@@ -53,38 +54,31 @@
 	}
 
 	$effect(() => {
-		void account?.id;
+		void enabled;
 		owner = null;
 		void load();
 	});
 
-	// The list holds the thousand most recently pushed: past it, ask GitHub. A full owner/name is
-	// checked directly, so a repo the token can't see says why instead of just not appearing.
+	// The list holds the thousand most recently pushed per token: past it, ask GitHub. (Whether a
+	// full owner/name can be opened, and with which token, is shown under the picker.)
 	$effect(() => {
-		const id = account?.id;
 		const q = value.trim();
 		found = [];
-		lookupError = '';
-		if (!id || q.length < 2 || q.includes('://')) return;
+		if (!enabled || q.length < 2 || q.includes('://')) return;
 		const ctrl = new AbortController();
 		const t = setTimeout(async () => {
 			searching = true;
 			const slash = /^([\w-]+)\/([\w.-]*)$/.exec(q);
-			const base = `/api/github-accounts/${id}/repos`;
 			try {
 				if (slash) {
-					// "owner/…": that owner's own list (private repos included), then the exact repo.
+					// "owner/…": that owner's own list, private repos included.
 					const [, who, name] = slash;
-					const theirs = await api.get<GithubRepo[]>(`${base}?owner=${encodeURIComponent(who)}`, ctrl.signal).catch(() => [] as GithubRepo[]);
-					found = theirs.filter((r) => r.name.toLowerCase().includes(name.toLowerCase()));
-					const exact = [...repos, ...theirs].some((r) => r.fullName.toLowerCase() === q.toLowerCase());
-					if (name && !exact) found = [...found, await api.get<GithubRepo>(`${base}?repo=${encodeURIComponent(q)}`, ctrl.signal)];
+					const theirs = await api.get<{ repos: GithubRepo[] }>(`/api/github/repos?owner=${encodeURIComponent(who)}`, ctrl.signal);
+					found = theirs.repos.filter((r) => r.name.toLowerCase().includes(name.toLowerCase()));
 				} else {
-					found = await api.get<GithubRepo[]>(`${base}?search=${encodeURIComponent(q)}`, ctrl.signal);
+					found = (await api.get<{ repos: GithubRepo[] }>(`/api/github/repos?search=${encodeURIComponent(q)}`, ctrl.signal)).repos;
 				}
-			} catch (err) {
-				if (!ctrl.signal.aborted && slash?.[2]) lookupError = errorMessage(err);
-			}
+			} catch {}
 			if (!ctrl.signal.aborted) searching = false;
 		}, 400);
 		return () => {
@@ -129,7 +123,7 @@
 		<Search class="pointer-events-none absolute top-2.5 left-3 size-4 text-muted-foreground" />
 		<input
 			class="input pl-9 font-mono text-[0.8125rem]"
-			placeholder={account ? 'Search repos, owner/ for an org, or paste a URL' : 'owner/name or https://… git URL'}
+			placeholder={enabled ? 'Search repos, owner/ for an org, or paste a URL' : 'owner/name or https://… git URL'}
 			bind:value
 			autocomplete="off"
 			spellcheck="false"
@@ -145,23 +139,19 @@
 		{#if loading || searching}<LoaderCircle class="absolute top-2.5 right-3 size-4 animate-spin text-muted-foreground" />{/if}
 	</div>
 
-	{#if account && owners.length > 1}
+	{#if enabled && owners.length > 1}
 		<div class="mt-2 flex flex-wrap items-center gap-1.5">
 			<button type="button" class="badge cursor-pointer {owner === null ? 'badge-primary' : ''}" onclick={() => (owner = null)}>All</button>
 			{#each owners as o (o)}
 				<button type="button" class="badge cursor-pointer {owner === o ? 'badge-primary' : ''}" onclick={() => (owner = o)}>
-					{#if o !== account.login}<Building2 />{/if}{o}
+					{#if !logins.includes(o)}<Building2 />{/if}{o}
 				</button>
 			{/each}
-			<span class="ml-auto text-[0.6875rem] text-muted-foreground" title="What GitHub returns for this token">{repos.length} repos · {repos.filter((r) => r.private).length} private</span>
+			<span class="ml-auto text-[0.6875rem] text-muted-foreground" title="What GitHub returns for your tokens">{repos.length} repos · {repos.filter((r) => r.private).length} private</span>
 			<button type="button" class="text-muted-foreground hover:text-foreground" title="Reload the list" onclick={() => load(true)}><RefreshCw class="size-3.5" /></button>
 		</div>
 	{/if}
 	{#if error}<p class="mt-1.5 text-xs text-danger">{error}</p>{/if}
-	{#if lookupError}
-		<p class="mt-1.5 text-xs text-danger">{lookupError}</p>
-		{#if account}<a class="mt-1 inline-block text-xs text-primary hover:underline" href="/accounts?check={account.id}&repo={encodeURIComponent(value.trim())}#github">See exactly what GitHub answers this token →</a>{/if}
-	{/if}
 	{#if notice}<p class="mt-1.5 text-xs text-warning">{notice}</p>{/if}
 
 	{#if open && matches.length}

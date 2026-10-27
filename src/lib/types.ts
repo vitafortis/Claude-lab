@@ -58,6 +58,24 @@ export interface GithubAccount {
 	createdAt: string;
 }
 
+/** What one GitHub token gets for a repository, for picking the token a session uses. */
+export interface TokenAccess {
+	accountId: string;
+	/** GitHub returned the repository for this token. */
+	ok: boolean;
+	/** The highest level in the `permissions` GitHub returned for the repository with this token. */
+	access: 'admin' | 'maintain' | 'write' | 'triage' | 'read' | null;
+	kind: 'fine-grained' | 'classic' | 'sign-in' | 'unknown';
+	/** A classic token's or sign-in's scopes, as GitHub reports them. */
+	scopes: string | null;
+	/** When the token expires, as GitHub reports it. */
+	expires: string | null;
+	/** How many repositories the token lists. */
+	sees: { repos: number; private: number } | null;
+	/** Why GitHub didn't return the repository, when it didn't. */
+	reason: string | null;
+}
+
 export interface GithubRepo {
 	fullName: string;
 	owner: string;
