@@ -7,7 +7,12 @@
 		<meta name="theme-color" content="#0b0d12" />
 		<script>
 			try {
-				const t = localStorage.getItem('ccm-theme');
+				// Carry over preferences saved before the rename (ccm-theme, ccm.pinned…).
+				for (const k of Object.keys(localStorage)) {
+					const n = k.replace(/^ccm([.-])/, 'orb$1');
+					if (n !== k && localStorage.getItem(n) === null) localStorage.setItem(n, localStorage.getItem(k));
+				}
+				const t = localStorage.getItem('orb-theme');
 				if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
 			} catch {}
 		</script>

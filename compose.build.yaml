@@ -5,29 +5,29 @@
 # Handy for adding tools to the session image (edit session/Dockerfile), for running
 # without access to ghcr.io, or for trying a branch before it's published.
 services:
-  cc-modern:
-    image: cc-modern:local
+  orbital:
+    image: orbital:local
     build: .
     environment:
-      CCM_SESSION_IMAGE: cc-modern-session:local
-      CCM_AGENTS_IMAGE: cc-modern-session:local-all
+      ORB_SESSION_IMAGE: orbital-session:local
+      ORB_AGENTS_IMAGE: orbital-session:local-all
     depends_on:
       session-image:
         condition: service_completed_successfully
       session-image-all:
         condition: service_completed_successfully
 
-  # Build the session images; cc·modern starts the actual session containers from them.
+  # Build the session images; Orbital starts the actual session containers from them.
   session-image:
-    image: cc-modern-session:local
+    image: orbital-session:local
     build: ./session
     entrypoint: ["true"]
     restart: "no"
 
   # With Codex CLI and Gemini CLI, for OpenAI and Google accounts. Remove this service
-  # (and CCM_AGENTS_IMAGE above) if you only use Claude.
+  # (and ORB_AGENTS_IMAGE above) if you only use Claude.
   session-image-all:
-    image: cc-modern-session:local-all
+    image: orbital-session:local-all
     build:
       context: ./session
       args:

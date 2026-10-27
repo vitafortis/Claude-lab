@@ -6,7 +6,7 @@ import { hashPassword, randomToken, sha256 } from './crypto.ts';
 import { authSessionUser, countUsers, createAuthSession, createUser, deleteAuthSession, touchUserLogin, upsertExternalUser } from './store.ts';
 import type { User } from '#lib/types.ts';
 
-export const SESSION_COOKIE = 'ccm_session';
+export const SESSION_COOKIE = 'orb_session';
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type AuthState = 'disabled' | 'setup' | 'anonymous' | 'authenticated';
@@ -16,17 +16,17 @@ const OPEN_USER: User = { id: 'open', email: 'admin', name: 'Admin', role: 'admi
 
 let bootstrapped = false;
 
-/** CCM_ADMIN_EMAIL + CCM_ADMIN_PASSWORD create the first account, so headless installs skip setup. */
+/** ORB_ADMIN_EMAIL + ORB_ADMIN_PASSWORD create the first account, so headless installs skip setup. */
 function bootstrapAdmin() {
 	bootstrapped = true;
 	const b = config.bootstrapAdmin;
 	if (!b || countUsers() > 0) return;
 	if (b.password.length < 8) {
-		console.warn('[cc-modern] CCM_ADMIN_PASSWORD must be at least 8 characters; showing the setup wizard instead.');
+		console.warn('[orbital] ORB_ADMIN_PASSWORD must be at least 8 characters; showing the setup wizard instead.');
 		return;
 	}
 	createUser({ email: b.email, name: b.name, passwordHash: hashPassword(b.password) });
-	console.log(`[cc-modern] Created account ${b.email} from CCM_ADMIN_EMAIL.`);
+	console.log(`[orbital] Created account ${b.email} from ORB_ADMIN_EMAIL.`);
 }
 
 /** Resolves the signed-in user from the session cookie's value. */
@@ -95,7 +95,7 @@ export function proxyIdentity(headers: Headers, clientAddress: string | undefine
 	if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null;
 	const groups = (s.proxy.groupsHeader && headers.get(s.proxy.groupsHeader)?.split(/[,|]/).map((g) => g.trim()).filter(Boolean)) || [];
 	const { allowed, admin } = accessFor(s.access, email, groups);
-	if (!allowed) return { denied: `${email} isn't allowed to sign in to Orbit` };
+	if (!allowed) return { denied: `${email} isn't allowed to sign in to Orbital` };
 	const name = (s.proxy.nameHeader && headers.get(s.proxy.nameHeader)?.trim()) || null;
 	return { user: upsertExternalUser({ email, name, source: 'proxy', admin }) };
 }

@@ -70,7 +70,7 @@ test('paneState for Codex and Gemini panes', () => {
 	assert.equal(paneState('node', ['⠏ Thinking (esc to cancel, 4s)'], 'gemini'), 'working');
 	assert.equal(paneState('node', ['● 1. Yes, allow once'], 'gemini'), 'waiting');
 	assert.equal(paneState('bash', ['── codex exited (status 0).'], 'codex'), 'shell');
-	// For Claude, node is still ccm-launch getting ready.
+	// For Claude, node is still orb-launch getting ready.
 	assert.equal(paneState('node', [], 'claude'), 'starting');
 });
 
@@ -96,7 +96,7 @@ test('providerEnv per kind', async () => {
 		'AWS_BEARER_TOKEN_BEDROCK=b',
 		'ANTHROPIC_DEFAULT_OPUS_MODEL=eu.anthropic.x'
 	]);
-	assert.ok(providerEnv(acct('vertex', { projectId: 'p', region: 'global' }), {}).includes('GOOGLE_APPLICATION_CREDENTIALS=/claude/.ccm/gcp-credentials.json'));
+	assert.ok(providerEnv(acct('vertex', { projectId: 'p', region: 'global' }), {}).includes('GOOGLE_APPLICATION_CREDENTIALS=/claude/.orb/gcp-credentials.json'));
 	assert.ok(providerEnv(acct('gateway', { baseUrl: 'https://gw', header: 'x-api-key' }), { token: 't' }).includes('ANTHROPIC_API_KEY=t'));
 	assert.ok(providerEnv(acct('gateway', { baseUrl: 'https://gw' }), { token: 't' }).includes('ANTHROPIC_AUTH_TOKEN=t'));
 	assert.deepEqual(providerEnv(acct('openai_api_key'), { apiKey: 'sk-o' }), ['OPENAI_API_KEY=sk-o']);

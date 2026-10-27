@@ -1,15 +1,15 @@
 #!/usr/bin/env node
-// Smoke test against a running cc·modern: sign in, start a session on a public repo,
+// Smoke test against a running Orbital: sign in, start a session on a public repo,
 // check the clone and the terminal, stop, start again (continuing the conversation), delete.
 // It needs no real Claude credentials: Claude starts and reports that it isn't signed in.
 //
-//   CCM_URL=http://homelab:3050 CCM_EMAIL=you@example.com CCM_PASSWORD=… pnpm e2e
+//   ORB_URL=http://homelab:3050 ORB_EMAIL=you@example.com ORB_PASSWORD=… pnpm e2e
 //
-// Optional: CCM_E2E_REPO (default octocat/Hello-World).
+// Optional: ORB_E2E_REPO (default octocat/Hello-World).
 import WebSocket from 'ws';
 
-const BASE = (process.env.CCM_URL ?? 'http://localhost:3050').replace(/\/$/, '');
-const REPO = process.env.CCM_E2E_REPO ?? 'octocat/Hello-World';
+const BASE = (process.env.ORB_URL ?? 'http://localhost:3050').replace(/\/$/, '');
+const REPO = process.env.ORB_E2E_REPO ?? 'octocat/Hello-World';
 let cookie = '';
 
 async function call(method, path, body) {
@@ -61,7 +61,7 @@ function step(name) {
 }
 
 let done = step('sign in');
-await call('POST', '/api/auth/login', { email: process.env.CCM_EMAIL, password: process.env.CCM_PASSWORD });
+await call('POST', '/api/auth/login', { email: process.env.ORB_EMAIL, password: process.env.ORB_PASSWORD });
 done();
 
 done = step('check Docker and storage');
@@ -77,7 +77,7 @@ done();
 let session;
 try {
 	done = step(`start a session on ${REPO}`);
-	session = await call('POST', '/api/sessions', { repo: REPO, accountId: account.id, name: 'cc-modern e2e', newBranch: 'e2e/smoke', prompt: 'hello' });
+	session = await call('POST', '/api/sessions', { repo: REPO, accountId: account.id, name: 'orbital e2e', newBranch: 'e2e/smoke', prompt: 'hello' });
 	await waitFor('the container', async () => (await call('GET', `/api/sessions/${session.id}`)).status === 'running');
 	done();
 

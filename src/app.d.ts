@@ -4,7 +4,7 @@ declare global {
 	/** The release version, e.g. 0.1.42 (set at build time). */
 	const __APP_VERSION__: string;
 	/** Terminal WebSocket handler, registered by hooks.server.ts for server.js. */
-	var __ccmUpgrade: ((req: import('node:http').IncomingMessage, socket: import('node:stream').Duplex, head: Buffer) => void) | undefined;
+	var __orbUpgrade: ((req: import('node:http').IncomingMessage, socket: import('node:stream').Duplex, head: Buffer) => void) | undefined;
 	namespace App {
 		interface Error {
 			message: string;

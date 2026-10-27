@@ -1,5 +1,5 @@
 /**
- * A session's GitHub credentials, as files in its .ccm folder (/session/.ccm in the
+ * A session's GitHub credentials, as files in its .orb folder (/session/.orb in the
  * container) rather than environment variables, which are fixed when the container is
  * created. Rewritten whenever the session's GitHub account or that account's token changes,
  * so a running session pushes with the current token without a restart:
@@ -13,7 +13,7 @@ import { getGithubAccount, getGithubToken, listSessions } from '../store.ts';
 import type { Session } from '../../types.ts';
 import { metaDir } from './storage.ts';
 
-const IN_CONTAINER = '/session/.ccm';
+const IN_CONTAINER = '/session/.orb';
 
 // git config through the environment (GIT_CONFIG_COUNT), so it holds on any session image.
 const GIT_CONFIG: [string, string][] = [

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Container entrypoint. With a command (e.g. `claude auth status`), runs just that.
-# Otherwise starts tmux session "main" running $CCM_PANE_CMD (ccm-launch for sessions,
-# ccm-login for sign-in) and lives exactly as long as that tmux session does.
+# Otherwise starts tmux session "main" running $ORB_PANE_CMD (orb-launch for sessions,
+# orb-login for sign-in) and lives exactly as long as that tmux session does.
 set -u
 
 if [ "$#" -gt 0 ]; then
@@ -10,9 +10,9 @@ fi
 
 export HOME="${HOME:-/home/node}"
 mkdir -p "$HOME"
-cd "${CCM_REPO_DIR:-/workspace}" 2>/dev/null || cd /workspace
+cd "${ORB_REPO_DIR:-/workspace}" 2>/dev/null || cd /workspace
 
-tmux new-session -d -s main -x "${CCM_COLS:-160}" -y "${CCM_ROWS:-48}" "${CCM_PANE_CMD:-ccm-launch}"
+tmux new-session -d -s main -x "${ORB_COLS:-160}" -y "${ORB_ROWS:-48}" "${ORB_PANE_CMD:-orb-launch}"
 
 # docker stop: end tmux, which hangs up Claude (its transcript is already on disk).
 trap 'tmux kill-server 2>/dev/null; exit 0' TERM INT

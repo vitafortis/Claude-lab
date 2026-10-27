@@ -13,7 +13,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
  */
 function terminalSockets(): Plugin {
 	return {
-		name: 'ccm-terminal-sockets',
+		name: 'orb-terminal-sockets',
 		configureServer(server) {
 			server.httpServer?.on('upgrade', async (req, socket, head) => {
 				// Vite's HMR socket shares this server; only take ours.
@@ -27,7 +27,7 @@ function terminalSockets(): Plugin {
 
 export default defineConfig({
 	// The image build passes the release version (see Dockerfile); local builds say -dev.
-	define: { __APP_VERSION__: JSON.stringify(process.env.CCM_VERSION || `${pkg.version}-dev`) },
+	define: { __APP_VERSION__: JSON.stringify(process.env.ORB_VERSION || `${pkg.version}-dev`) },
 	plugins: [
 		tailwindcss(),
 		terminalSockets(),

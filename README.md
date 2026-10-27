@@ -2,7 +2,7 @@
   <img src="docs/logo.svg" width="64" height="64" alt="" />
 </p>
 
-<h1 align="center">Orbit</h1>
+<h1 align="center">Orbital</h1>
 
 <p align="center">
   Claude Code sessions on your own hardware.<br />
@@ -13,16 +13,16 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/overview.png" alt="Orbit sessions overview" />
+  <img src="docs/screenshots/overview.png" alt="Orbital sessions overview" />
 </p>
 
 ## Features
 
-- **One container per session**: Orbit clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
+- **One container per session**: Orbital clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
 - **Terminals in the browser**: open any session as a full terminal (xterm.js over a WebSocket). Claude runs inside tmux, so closing the tab doesn't stop it, and several browsers can watch the same session. A **Shell** tab opens a second terminal in the same container. You type straight into the terminal, and scroll it with the wheel or a finger; on phones, a key bar adds Esc, Tab, ⇧Tab, arrows, Ctrl+C, End and Enter. When the agent asks something (a permission prompt, a question with options), the options show above the terminal as buttons. Links on screen, even long sign-in links that wrap over many lines, show above the terminal with Open and Copy buttons.
 - **Live overview**: every session shows whether Claude is *working*, *needs you* (a permission prompt or question), is *idle*, or has exited, plus the last prompt and reply, the task list, the tool it's running, git changes and the last lines of its screen. Sessions that need you sort to the top and get a quick-reply box. **Summarize** asks a small model for a three-sentence summary, using the session's own Claude account.
 - **Stop, resume, relaunch**: stopping removes the container and keeps everything else. Starting again picks up the newest conversation (`claude --continue`); you can also resume any earlier conversation or start a fresh one, and restart Claude inside a running session.
-- **Linear automations**: connect Linear and add rules like *issues in ENG labelled `claude` start a session on owner/repo*. Each new issue gets its own session, on Linear's branch name for it (so the pull request links back), with the issue as the first message. Orbit moves the issue to In Progress, comments with a link to the session, and comments again with the PR once Claude opens one. It polls Linear every minute, so nothing on your network has to be reachable from outside.
+- **Linear automations**: connect Linear and add rules like *issues in ENG labelled `claude` start a session on owner/repo*. Each new issue gets its own session, on Linear's branch name for it (so the pull request links back), with the issue as the first message. Orbital moves the issue to In Progress, comments with a link to the session, and comments again with the PR once Claude opens one. It polls Linear every minute, so nothing on your network has to be reachable from outside.
 - **Skill sessions**: start a session from a skill or slash command instead of a message: `/code-review 234` on a pull request, `/security-review`, `/simplify`, or the account's own skills. Pick a pull request and the session checks out its branch (or `pull/<n>/head` for a fork). **Review a PR** on the overview starts one in two clicks, and **Session → Run a skill** sends one to a running session.
 - **Pull requests**: when a session's branch has a pull request, its number and state (open, draft, merged, closed) show on the card and link to GitHub.
 - **Remote Control**: sessions on a Claude subscription start with `--remote-control "<name>"`, so they also show up at claude.ai/code and in the Claude app, under the session's name. The overview links straight to them.
@@ -76,8 +76,8 @@ Screenshots use demo data: the conversations, Linear workspace and pull requests
 ### Docker Compose (recommended)
 
 ```sh
-mkdir cc-modern && cd cc-modern
-curl -fsSLO https://raw.githubusercontent.com/vitafortis/Claude-lab/main/compose.yaml
+mkdir orbital && cd orbital
+curl -fsSLO https://raw.githubusercontent.com/vitafortis/Orbital/main/compose.yaml
 docker compose up -d
 ```
 
@@ -87,12 +87,12 @@ Open `http://<your-host>:3050` and create the local admin account. Everything el
 2. **Accounts → GitHub → Add a token**, for private repos and pushing. Public repos work without one.
 3. **New session**: pick the repo, optionally a branch to start from and a new branch to work on, a first message, the model and the permission mode. **Start session** opens its terminal.
 
-The first start pulls the session image (`ghcr.io/vitafortis/cc-modern-session`), which takes a minute. To put it behind single sign-on or your reverse proxy's login, see [Sign-in](#sign-in).
+The first start pulls the session image (`ghcr.io/vitafortis/orbital-session`), which takes a minute. To put it behind single sign-on or your reverse proxy's login, see [Sign-in](#sign-in).
 
 To build both images from source instead (for example to add tools to the session image):
 
 ```sh
-git clone https://github.com/vitafortis/Claude-lab cc-modern && cd cc-modern
+git clone https://github.com/vitafortis/Orbital orbital && cd orbital
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
@@ -100,19 +100,19 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 
 ### Requirements
 
-- Docker Engine **26 or newer** (sessions mount parts of the `cc-modern-sessions` volume by subpath). On older engines, bind-mount a host folder at `/sessions` and set `CCM_SESSIONS_HOST_PATH` to it.
-- The Docker socket. Orbit creates, starts and stops session containers, so it needs the real socket, not a read-only proxy.
+- Docker Engine **26 or newer** (sessions mount parts of the `orbital-sessions` volume by subpath). On older engines, bind-mount a host folder at `/sessions` and set `ORB_SESSIONS_HOST_PATH` to it.
+- The Docker socket. Orbital creates, starts and stops session containers, so it needs the real socket, not a read-only proxy.
 
-> **Security.** Whoever can sign in to Orbit can run code on the Docker host (that is the point of it). Keep it on your LAN or behind a VPN or an authenticating reverse proxy, and use a strong password.
+> **Security.** Whoever can sign in to Orbital can run code on the Docker host (that is the point of it). Keep it on your LAN or behind a VPN or an authenticating reverse proxy, and use a strong password.
 
 ## Sign-in
 
 **Settings → Sign-in & users** (admins only) decides how people get in. The local admin made at setup always works, so a broken SSO setup never locks you out.
 
 - **Password**: the local admin's email and password. The form can be hidden once SSO works; `/login?local` still shows it.
-- **Single sign-on (OpenID Connect)**: a *Sign in with…* button for Authentik, Authelia, Keycloak, Pocket ID, Zitadel, Google, Entra ID and others. Create a confidential web client at your provider with the redirect URI shown on the page (`https://<cc-modern>/api/auth/oidc/callback`), then enter the issuer URL (**Test** checks it), client ID and secret. It uses the authorization code flow with PKCE. Groups come from the `groups` claim, or another one you name (`realm_access.roles` for Keycloak).
-- **Reverse proxy headers (forward auth)**: when Authelia, Authentik's proxy outpost, oauth2-proxy, Tailscale and the like sign people in in front of Orbit, it trusts `Remote-Email`, `Remote-Name` and `Remote-Groups` (names configurable), but only from the proxy addresses you list (Docker's and LAN ranges by default). Make sure the proxy strips those headers from incoming requests and that port 3050 isn't reachable around it. Set the proxy's logout URL so **Sign out** ends that session too.
-- **Off**: anyone who can reach Orbit uses it as the admin. Only for a proxy that already signs people in, on a network you trust. `CCM_AUTH=disabled` on the container does the same and overrides the UI (for recovery).
+- **Single sign-on (OpenID Connect)**: a *Sign in with…* button for Authentik, Authelia, Keycloak, Pocket ID, Zitadel, Google, Entra ID and others. Create a confidential web client at your provider with the redirect URI shown on the page (`https://<orbital>/api/auth/oidc/callback`), then enter the issuer URL (**Test** checks it), client ID and secret. It uses the authorization code flow with PKCE. Groups come from the `groups` claim, or another one you name (`realm_access.roles` for Keycloak).
+- **Reverse proxy headers (forward auth)**: when Authelia, Authentik's proxy outpost, oauth2-proxy, Tailscale and the like sign people in in front of Orbital, it trusts `Remote-Email`, `Remote-Name` and `Remote-Groups` (names configurable), but only from the proxy addresses you list (Docker's and LAN ranges by default). Make sure the proxy strips those headers from incoming requests and that port 3050 isn't reachable around it. Set the proxy's logout URL so **Sign out** ends that session too.
+- **Off**: anyone who can reach Orbital uses it as the admin. Only for a proxy that already signs people in, on a network you trust. `ORB_AUTH=disabled` on the container does the same and overrides the UI (for recovery).
 
 **Who gets in**: SSO and proxy users can be limited to emails, `@domains` or groups, and emails or groups can be made admins. With no rules, everyone your provider lets through gets in. People appear under **Users** the first time they sign in; a local account with the same email becomes that account.
 
@@ -123,7 +123,7 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 ## How it works
 
 ```
- browser ──HTTP/SSE──▶ Orbit ──Docker API──▶ session container (one per session)
+ browser ──HTTP/SSE──▶ Orbital ──Docker API──▶ session container (one per session)
     │                   (SvelteKit)                 tini → tmux "main" → claude --name … --remote-control …
     └──WebSocket──────▶ terminal bridge ──docker exec -it──▶ tmux attach   (or bash, for the Shell tab)
 ```
@@ -135,18 +135,18 @@ This also builds the Codex and Gemini image; drop the `session-image-all` servic
 
 ### Where things live
 
-Everything a session needs survives its container, in the `cc-modern-sessions` volume:
+Everything a session needs survives its container, in the `orbital-sessions` volume:
 
 | Path in the volume | Mounted in the session at | What |
 | --- | --- | --- |
 | `accounts/<account>/` | `/claude` (`CLAUDE_CONFIG_DIR`), `/codex` (`CODEX_HOME`) or `/gemini` (`GEMINI_CLI_HOME`) | The account's login, settings, memory and conversations (and a Vertex service account key). Shared by the account's sessions. |
 | `sessions/<id>/home/` | `/session/home` (`$HOME`) | The session's home folder: shell history, caches, tool configs. |
 | `sessions/<id>/repo/` | `/workspace/<repo>` (Codex and Gemini: `/workspace/<id>/<repo>`) | The cloned repository, with your uncommitted work. |
-| `sessions/<id>/.ccm/` | `/session/.ccm` | Launch settings and the last AI summary, written by Orbit. |
+| `sessions/<id>/.orb/` | `/session/.orb` | Launch settings and the last AI summary, written by Orbital. |
 
 Conversations are stored per session (`CLAUDE_CODE_PROJECT_DIR_NAME` is the session id), so two sessions on the same repo never mix their history. Codex and Gemini keep conversations by working directory, so their sessions get a working directory of their own. Deleting a session removes its folder and its Claude conversations; deleting an account removes its folder.
 
-The app's own data (`cc-modern-data`, at `/data`) holds the SQLite store and `secret.key`, the key that encrypts tokens. Back up both volumes, and keep `secret.key` (or set `CCM_SECRET_KEY`), or the stored tokens can't be decrypted.
+The app's own data (`orbital-data`, at `/data`) holds the SQLite store and `secret.key`, the key that encrypts tokens. Back up both volumes, and keep `secret.key` (or set `ORB_SECRET_KEY`), or the stored tokens can't be decrypted.
 
 ## Model accounts
 
@@ -170,13 +170,13 @@ Claude Code only runs Claude models, so OpenAI and Google models run through the
 
 Remote Control needs a full claude.ai login; Claude Code refuses it for tokens, API keys and cloud providers. The first time a subscription session starts with Remote Control, Claude Code asks you to confirm it once: answer in the session's terminal.
 
-**Check** makes sure an account works: `claude auth status` for Anthropic accounts, a one-line request with a small model for cloud and gateway accounts, `codex login status` for ChatGPT, the sign-in files for Google, and a model listing for OpenAI and Gemini keys (free, but it needs Orbit itself to reach api.openai.com or generativelanguage.googleapis.com).
+**Check** makes sure an account works: `claude auth status` for Anthropic accounts, a one-line request with a small model for cloud and gateway accounts, `codex login status` for ChatGPT, the sign-in files for Google, and a model listing for OpenAI and Gemini keys (free, but it needs Orbital itself to reach api.openai.com or generativelanguage.googleapis.com).
 
 Every session of an account shares that account's configuration, as sessions on one machine share `~/.claude`. Settings you change in one session (`/config`, MCP servers, memory) apply to the others.
 
 ### Codex and Gemini sessions
 
-They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vitafortis/cc-modern-session:latest-all` (**Settings → Image for Codex and Gemini sessions**, or `CCM_AGENTS_IMAGE`). It's pulled the first time an OpenAI or Google account starts a session, so Claude-only installs never download it.
+They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vitafortis/orbital-session:latest-all` (**Settings → Image for Codex and Gemini sessions**, or `ORB_AGENTS_IMAGE`). It's pulled the first time an OpenAI or Google account starts a session, so Claude-only installs never download it.
 
 - The terminal, live state (working, waiting, idle), git status, stop and continue (`codex resume --last`, `gemini --resume latest`) all work as for Claude.
 - The conversation summary, the conversation list, **Summarize**, skills and Remote Control are Claude Code features and only show for Claude sessions.
@@ -192,11 +192,11 @@ They run in the session image with Codex CLI and Gemini CLI added: `ghcr.io/vita
 
 ## GitHub
 
-Add a **fine-grained token** with access to the repos you want (*Contents* and *Pull requests*: read and write; add *Workflows* to push workflow changes), or a **classic token** with `repo`, `read:org` and `workflow`. Orbit lists every repository the token can see, grouped by owner, so organizations show up as filters in the repo picker.
+Add a **fine-grained token** with access to the repos you want (*Contents* and *Pull requests*: read and write; add *Workflows* to push workflow changes), or a **classic token** with `repo`, `read:org` and `workflow`. Orbital lists every repository the token can see, grouped by owner, so organizations show up as filters in the repo picker.
 
 **Sign in with GitHub** appears once **Settings → GitHub OAuth app** names an OAuth app of yours with *Enable Device Flow* checked (GitHub → Settings → Developer settings → OAuth Apps). No client secret or callback URL is needed.
 
-In a session, git and `gh` sign in as the session's GitHub account without further setup: `git clone`, `pull` and `push` (SSH remotes such as `git@github.com:…` go over https), `gh pr create` and the rest. The token sits in `/session/.ccm` (`github-token`, and `gh/hosts.yml` for gh) and stays current while the session runs: pick another GitHub account in the session panel, or replace an expired token under **Accounts → GitHub**, and the next push uses it, with no restart.
+In a session, git and `gh` sign in as the session's GitHub account without further setup: `git clone`, `pull` and `push` (SSH remotes such as `git@github.com:…` go over https), `gh pr create` and the rest. The token sits in `/session/.orb` (`github-token`, and `gh/hosts.yml` for gh) and stays current while the session runs: pick another GitHub account in the session panel, or replace an expired token under **Accounts → GitHub**, and the next push uses it, with no restart.
 
 ## Linear
 
@@ -204,7 +204,7 @@ In a session, git and `gh` sign in as the session's GitHub account without furth
 2. **Add rule**: pick the team, the label that hands an issue over (default `claude`), the repository, a profile or the model account, the GitHub account and the permission mode. The first message is a template with `{identifier}`, `{title}`, `{description}`, `{url}` and `{branch}`. Start it with a skill (`/my-skill {identifier}`) to run one.
 3. Label an issue. Within a minute (or on **Check now**) a session starts on Linear's branch name for the issue, the issue moves to In Progress, and a comment links to the session. When Claude opens the pull request, a second comment links to it, and Linear's GitHub integration links the PR to the issue through the branch name and "Fixes ENG-123".
 
-Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open Orbit at.
+Issues that already had the label when you added the rule are skipped unless you switch on **Also start sessions for issues that already have the label**. At most three sessions start per check, so labelling a dozen issues at once doesn't swamp the host. Set **Settings → Public URL** if the links in comments should use a different address than the one you open Orbital at.
 
 ## Sessions
 
@@ -221,7 +221,7 @@ Issues that already had the label when you added the rule are skipped unless you
 
 `session/Dockerfile` builds on `node:24-trixie-slim` with Claude Code (npm, stable channel), git, gh, tmux, ripgrep, jq, python3 and build tools. With `--build-arg AGENTS="claude codex gemini"` it also installs Codex CLI and Gemini CLI; that build is published as `:latest-all`. Claude Code's auto-updater is off; the image is rebuilt weekly, and **Settings → Pull latest** fetches it (sessions use it from their next start).
 
-To add languages or tools, build your own image `FROM ghcr.io/vitafortis/cc-modern-session` (or edit `session/Dockerfile` and use `compose.build.yaml`), and set it under **Settings → Session containers → Image**. Keep the `node` user (uid 1000) and the entrypoint.
+To add languages or tools, build your own image `FROM ghcr.io/vitafortis/orbital-session` (or edit `session/Dockerfile` and use `compose.build.yaml`), and set it under **Settings → Session containers → Image**. Keep the `node` user (uid 1000) and the entrypoint.
 
 Settings also take a Docker network for session containers (to reach other services on your homelab by name), memory and CPU limits, and extra environment variables for every session (`KEY=value` lines, e.g. a proxy or a private registry).
 
@@ -231,16 +231,37 @@ Everything is configured in the UI. The container takes a few optional variables
 
 | Variable | Default | |
 | --- | --- | --- |
-| `CCM_ADMIN_EMAIL`, `CCM_ADMIN_PASSWORD`, `CCM_ADMIN_NAME` | | Create the local admin on first start instead of the setup screen |
-| `CCM_SECRET_KEY` | random, in `/data/secret.key` | Encryption key for stored tokens |
-| `CCM_AUTH` | | `disabled` turns sign-in off whatever the UI says (recovery) |
-| `CCM_SESSION_IMAGE`, `CCM_AGENTS_IMAGE` | `ghcr.io/vitafortis/cc-modern-session:latest`, `…:latest-all` | Defaults for **Settings → Image** |
-| `CCM_SESSION_NETWORK` | Docker's default bridge | Default for **Settings → Docker network** |
-| `CCM_GITHUB_CLIENT_ID` | | Default for **Settings → GitHub OAuth app** |
-| `CCM_SESSIONS_VOLUME` / `CCM_SESSIONS_HOST_PATH` | found by inspecting our own container | How session containers reach the `/sessions` data, when auto-detection can't tell |
-| `CCM_SELF_CONTAINER` | the hostname | Our own container, if its hostname was changed |
-| `CCM_INSTANCE` | `cc-modern` | Label on our containers, so two installs can share a Docker host |
-| `CCM_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker endpoint (`tcp://host:2375` works too) |
+| `ORB_ADMIN_EMAIL`, `ORB_ADMIN_PASSWORD`, `ORB_ADMIN_NAME` | | Create the local admin on first start instead of the setup screen |
+| `ORB_SECRET_KEY` | random, in `/data/secret.key` | Encryption key for stored tokens |
+| `ORB_AUTH` | | `disabled` turns sign-in off whatever the UI says (recovery) |
+| `ORB_SESSION_IMAGE`, `ORB_AGENTS_IMAGE` | `ghcr.io/vitafortis/orbital-session:latest`, `…:latest-all` | Defaults for **Settings → Image** |
+| `ORB_SESSION_NETWORK` | Docker's default bridge | Default for **Settings → Docker network** |
+| `ORB_GITHUB_CLIENT_ID` | | Default for **Settings → GitHub OAuth app** |
+| `ORB_SESSIONS_VOLUME` / `ORB_SESSIONS_HOST_PATH` | found by inspecting our own container | How session containers reach the `/sessions` data, when auto-detection can't tell |
+| `ORB_SELF_CONTAINER` | the hostname | Our own container, if its hostname was changed |
+| `ORB_INSTANCE` | `orbital` | Label on our containers, so two installs can share a Docker host |
+| `ORB_DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker endpoint (`tcp://host:2375` works too) |
+
+### Upgrading from cc·modern or Orbit
+
+Orbital used to be called cc·modern (and briefly Orbit), with `cc-modern` images, volumes and labels and `CCM_*` settings. To move an install over:
+
+1. **Stop every session** first. Session containers are labelled with the old name, so Orbital doesn't recognise ones still running (their data is safe either way).
+2. **Keep your volumes.** The new `compose.yaml` names them `orbital-data` and `orbital-sessions`; point it at the old ones instead (the data volume carries the compose project's prefix, usually the folder name, see `docker volume ls`):
+
+   ```yaml
+   volumes:
+     orbital-data:
+       external: true
+       name: cc-modern_cc-modern-data
+     orbital-sessions:
+       external: true
+       name: cc-modern-sessions
+   ```
+
+3. **Switch images** to `ghcr.io/vitafortis/orbital` and `…/orbital-session`. A custom session image saved in Settings stays as it is; rebuild it `FROM ghcr.io/vitafortis/orbital-session` so it has the renamed `orb-*` scripts.
+
+`CCM_*` variables still work, but rename them to `ORB_*`. On start, Orbital takes over `cc-modern.db` (as `orbital.db`) and renames each session's `.ccm` folder to `.orb`; stored tokens stay readable, and the browser keeps its theme, pins and panel layout. Everyone is signed out once, since the cookie was renamed too.
 
 ## Development
 
@@ -252,11 +273,11 @@ pnpm test       # unit tests (node --test)
 pnpm build && pnpm start
 ```
 
-Outside Docker, session data lives in `./data/sessions` and session containers bind-mount it. Build the session image locally with `docker build -t cc-modern-session:dev session` and set `CCM_SESSION_IMAGE=cc-modern-session:dev`.
+Outside Docker, session data lives in `./data/sessions` and session containers bind-mount it. Build the session image locally with `docker build -t orbital-session:dev session` and set `ORB_SESSION_IMAGE=orbital-session:dev`.
 
-To try Linear rules without a workspace, point `CCM_LINEAR_API_URL` at a mock GraphQL server.
+To try Linear rules without a workspace, point `ORB_LINEAR_API_URL` at a mock GraphQL server.
 
-`pnpm e2e` runs a smoke test against a running instance (`CCM_URL`, `CCM_EMAIL`, `CCM_PASSWORD`): it starts a session on a public repo with a throwaway, signed-out Claude account, checks the clone, both terminals, stop and resume, then deletes everything it made.
+`pnpm e2e` runs a smoke test against a running instance (`ORB_URL`, `ORB_EMAIL`, `ORB_PASSWORD`): it starts a session on a public repo with a throwaway, signed-out Claude account, checks the clone, both terminals, stop and resume, then deletes everything it made.
 
 Built with SvelteKit, Tailwind CSS and xterm.js, in the same style as [pg·modern](https://github.com/vitafortis/pg-modern) and [octo·modern](https://github.com/vitafortis/octo-modern).
 
@@ -264,4 +285,4 @@ Built with SvelteKit, Tailwind CSS and xterm.js, in the same style as [pg·moder
 
 [Apache 2.0](LICENSE): use, modify and redistribute it, commercially or not, keeping the license and [NOTICE](NOTICE). Contributions are accepted under the same license.
 
-Orbit is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners. Brand logos come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) and only identify each service.
+Orbital is an independent project, not affiliated with or endorsed by Anthropic, OpenAI or Google. Claude is a trademark of Anthropic; Codex and Gemini belong to their owners. Brand logos come from [LobeHub Icons](https://github.com/lobehub/lobe-icons) (MIT) and [Simple Icons](https://simpleicons.org) (CC0) and only identify each service.

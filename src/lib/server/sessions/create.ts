@@ -19,7 +19,7 @@ export async function launchNewSession(
 	if (account) rest.permissionMode = fitPermissionMode(account.agent, rest.permissionMode);
 	if (rest.checkoutPr && rest.repoFullName && !rest.baseBranch) {
 		// A PR from this repo: clone its branch, so commits push straight to the PR.
-		// From a fork (or if GitHub can't say), ccm-launch fetches pull/<n>/head instead.
+		// From a fork (or if GitHub can't say), orb-launch fetches pull/<n>/head instead.
 		try {
 			const pr = await getPull(rest.githubAccountId ? (getGithubAccount(rest.githubAccountId) ?? null) : null, rest.repoFullName, rest.checkoutPr);
 			if (pr.headRepo?.toLowerCase() === rest.repoFullName.toLowerCase()) rest.baseBranch = pr.headRef;

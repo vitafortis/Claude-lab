@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Runs in the session's tmux pane: clones the repo on first launch, then starts the agent
-# ($CCM_AGENT: claude, codex or gemini) as /session/.ccm/launch.json says (new, continue or
+# ($ORB_AGENT: claude, codex or gemini) as /session/.orb/launch.json says (new, continue or
 # resume a conversation). When the agent exits the pane drops to a shell, so nothing on
 # screen is lost.
 set -u
 
-repo="${CCM_REPO_DIR:?}"
-agent="${CCM_AGENT:-claude}"
+repo="${ORB_REPO_DIR:?}"
+agent="${ORB_AGENT:-claude}"
 bold=$'\e[1m'; dim=$'\e[2m'; red=$'\e[31m'; reset=$'\e[0m'
 
 case "$agent" in
@@ -17,38 +17,38 @@ esac
 
 fallback() {
 	echo
-	echo "${dim}── ${agent} exited${1:+ ($1)}. Run ${reset}${bold}${again}${reset}${dim} to pick up again, or use Restart in cc·modern.${reset}"
+	echo "${dim}── ${agent} exited${1:+ ($1)}. Run ${reset}${bold}${again}${reset}${dim} to pick up again, or use Restart in Orbital.${reset}"
 	exec bash -l
 }
 
 if [ ! -e "$repo/.git" ]; then
-	echo "${dim}Cloning ${reset}${bold}${CCM_REPO_URL}${reset}${dim}${CCM_BASE_BRANCH:+ (branch $CCM_BASE_BRANCH)}…${reset}"
+	echo "${dim}Cloning ${reset}${bold}${ORB_REPO_URL}${reset}${dim}${ORB_BASE_BRANCH:+ (branch $ORB_BASE_BRANCH)}…${reset}"
 	args=(clone --progress)
-	[ -n "${CCM_BASE_BRANCH:-}" ] && args+=(--branch "$CCM_BASE_BRANCH")
-	if ! git "${args[@]}" "$CCM_REPO_URL" "$repo"; then
+	[ -n "${ORB_BASE_BRANCH:-}" ] && args+=(--branch "$ORB_BASE_BRANCH")
+	if ! git "${args[@]}" "$ORB_REPO_URL" "$repo"; then
 		echo "${red}Clone failed.${reset} Check the URL and the GitHub account's access, then use Restart."
 		fallback "clone failed"
 	fi
 	# A pull request from a fork: its head is only reachable as pull/<n>/head. (A PR from
 	# this repo was cloned straight onto its branch, so pushes update the PR.)
-	if [ -n "${CCM_PR_NUMBER:-}" ] && [ -z "${CCM_BASE_BRANCH:-}" ]; then
-		git -C "$repo" fetch origin "pull/$CCM_PR_NUMBER/head:pr-$CCM_PR_NUMBER" && git -C "$repo" switch "pr-$CCM_PR_NUMBER"
+	if [ -n "${ORB_PR_NUMBER:-}" ] && [ -z "${ORB_BASE_BRANCH:-}" ]; then
+		git -C "$repo" fetch origin "pull/$ORB_PR_NUMBER/head:pr-$ORB_PR_NUMBER" && git -C "$repo" switch "pr-$ORB_PR_NUMBER"
 	fi
-	if [ -n "${CCM_NEW_BRANCH:-}" ]; then
-		git -C "$repo" switch -c "$CCM_NEW_BRANCH" || git -C "$repo" switch "$CCM_NEW_BRANCH"
+	if [ -n "${ORB_NEW_BRANCH:-}" ]; then
+		git -C "$repo" switch -c "$ORB_NEW_BRANCH" || git -C "$repo" switch "$ORB_NEW_BRANCH"
 	fi
 	echo
 fi
 
 cd "$repo" || fallback "no repo"
-node /usr/local/lib/ccm/seed.mjs "$repo" || true
+node /usr/local/lib/orb/seed.mjs "$repo" || true
 
 # Codex's terminal UI only uses a stored key, not OPENAI_API_KEY.
 if [ "$agent" = codex ] && [ -n "${OPENAI_API_KEY:-}" ]; then
 	printenv OPENAI_API_KEY | codex login --with-api-key >/dev/null 2>&1 || echo "${red}Couldn't store the OpenAI API key for Codex.${reset}"
 fi
 
-mapfile -d '' agent_args < <(node /usr/local/lib/ccm/args.mjs)
+mapfile -d '' agent_args < <(node /usr/local/lib/orb/args.mjs)
 # Job control gives the agent the terminal's foreground process group: tmux then reports it
 # as the pane's command, and Ctrl+C reaches the agent without ending this script.
 set -m

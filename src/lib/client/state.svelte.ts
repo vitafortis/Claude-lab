@@ -23,7 +23,7 @@ export function setTheme(value: 'dark' | 'light') {
 	theme.value = value;
 	document.documentElement.dataset.theme = value;
 	try {
-		localStorage.setItem('ccm-theme', value);
+		localStorage.setItem('orb-theme', value);
 	} catch {}
 }
 

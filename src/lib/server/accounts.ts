@@ -28,7 +28,7 @@ async function baseSpec(accountId: string, extra: { env?: string[]; cmd?: string
 	return {
 		Image: agent.image,
 		Cmd: extra.cmd,
-		Env: ['HOME=/home/node', 'CCM_REPO_DIR=/workspace', ...parseEnvLines(settings.extraEnv), ...agent.env, ...(extra.env ?? [])],
+		Env: ['HOME=/home/node', 'ORB_REPO_DIR=/workspace', ...parseEnvLines(settings.extraEnv), ...agent.env, ...(extra.env ?? [])],
 		Labels: { [LABELS.instance]: config.instance, [LABELS.kind]: extra.kind, [LABELS.account]: accountId },
 		HostConfig: {
 			Mounts: [mountSpec(b, accountRel(accountId), agent.mount)],
@@ -50,7 +50,7 @@ export async function startLogin(accountId: string, restart = false): Promise<st
 		if (running) return running;
 	}
 	await removeOwned(name);
-	const id = await createContainer(name, await baseSpec(accountId, { kind: 'login', env: ['CCM_PANE_CMD=ccm-login'] }));
+	const id = await createContainer(name, await baseSpec(accountId, { kind: 'login', env: ['ORB_PANE_CMD=orb-login'] }));
 	await startContainer(id);
 	return id;
 }

@@ -1,5 +1,5 @@
 /**
- * Sign-in settings, kept in the database and edited under Settings → Sign-in. CCM_AUTH=disabled
+ * Sign-in settings, kept in the database and edited under Settings → Sign-in. ORB_AUTH=disabled
  * still turns sign-in off from the environment, for recovery.
  */
 import { config } from './config.ts';

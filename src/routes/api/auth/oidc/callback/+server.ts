@@ -14,7 +14,7 @@ export const GET: RequestHandler = async ({ url, cookies, locals }) => {
 		target = next;
 	} catch (err) {
 		const msg = err instanceof BadRequest ? err.message : 'Single sign-on failed';
-		if (!(err instanceof BadRequest)) console.error('[cc-modern] SSO:', err);
+		if (!(err instanceof BadRequest)) console.error('[orbital] SSO:', err);
 		target = `/login?error=${encodeURIComponent(msg)}`;
 	}
 	redirect(303, target);

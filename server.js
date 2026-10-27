@@ -2,9 +2,9 @@
 // adapter-node's own build/index.js has no upgrade hook, so we run the HTTP server here.
 import { createServer } from 'node:http';
 
-// The image's entrypoint starts us as root to give CCM_RUN_AS the Docker socket's group.
+// The image's entrypoint starts us as root to give ORB_RUN_AS the Docker socket's group.
 // Drop to that user before loading the app, so nothing it writes is owned by root.
-const runAs = process.env.CCM_RUN_AS;
+const runAs = process.env.ORB_RUN_AS;
 if (runAs && process.getuid?.() === 0) {
 	process.initgroups(runAs, runAs);
 	process.setgid(runAs);
@@ -20,7 +20,7 @@ const server = createServer(handler);
 
 server.on('upgrade', (req, socket, head) => {
 	// Registered by hooks.server.ts `init`, which handler.js runs before it resolves.
-	const upgrade = globalThis.__ccmUpgrade;
+	const upgrade = globalThis.__orbUpgrade;
 	if (!upgrade || !req.url?.startsWith('/ws/')) {
 		socket.destroy();
 		return;
@@ -28,7 +28,7 @@ server.on('upgrade', (req, socket, head) => {
 	upgrade(req, socket, head);
 });
 
-server.listen(port, host, () => console.log(`[cc-modern] listening on http://${host}:${port}`));
+server.listen(port, host, () => console.log(`[orbital] listening on http://${host}:${port}`));
 
 let stopping = false;
 function shutdown() {

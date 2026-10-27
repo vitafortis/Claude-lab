@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** Orbit: a prompt with an agent circling it. The agent moves unless `still`, or motion is turned off. */
+	/** Orbital: a prompt with an agent circling it. The agent moves unless `still`, or motion is turned off. */
 	let { size = 28, still = false }: { size?: number; still?: boolean } = $props();
 	// Gradient ids must be unique per instance; the logo appears more than once on some pages.
 	const id = $props.id();

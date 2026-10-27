@@ -1,5 +1,5 @@
-// Pre-answers first-run questions that cc·modern already knows the answer to, for the
-// session's agent ($CCM_AGENT):
+// Pre-answers first-run questions that Orbital already knows the answer to, for the
+// session's agent ($ORB_AGENT):
 //   claude  onboarding, trusting the repo folder, approving the account's API key
 //   codex   trusting the repo folder
 //   gemini  which sign-in to use (it asks even when GEMINI_API_KEY is set)
@@ -8,7 +8,7 @@ import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } fr
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-const agent = process.env.CCM_AGENT || 'claude';
+const agent = process.env.ORB_AGENT || 'claude';
 const repo = process.argv[2];
 
 /** Reads a JSON file, or {} when there is none. A half-written one (another session saving
@@ -23,7 +23,7 @@ function readJson(file) {
 
 function writeJson(file, data) {
 	mkdirSync(dirname(file), { recursive: true });
-	const tmp = `${file}.ccm-${process.pid}`;
+	const tmp = `${file}.orb-${process.pid}`;
 	writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
 	renameSync(tmp, file);
 }
@@ -52,7 +52,7 @@ function seedClaude() {
 		r.rejected = (r.rejected ?? []).filter((k) => k !== tail);
 	}
 
-	if (process.env.CCM_BYPASS_PERMISSIONS === '1') cfg.bypassPermissionsModeAccepted = true;
+	if (process.env.ORB_BYPASS_PERMISSIONS === '1') cfg.bypassPermissionsModeAccepted = true;
 	writeJson(file, cfg);
 }
 

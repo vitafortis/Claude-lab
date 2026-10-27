@@ -1,6 +1,6 @@
 # Screenshots
 
-Every screen of cc·modern, from a test install with demo data: the conversations, Linear workspace, pull requests and accounts are made up, and the keys are dummies (so some terminals show the agent's sign-in errors).
+Every screen of Orbital, from a test install with demo data: the conversations, Linear workspace, pull requests and accounts are made up, and the keys are dummies (so some terminals show the agent's sign-in errors).
 
 ## Sessions
 

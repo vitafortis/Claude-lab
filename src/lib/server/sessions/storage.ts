@@ -5,12 +5,12 @@
  *                                           account's sessions: login, settings, transcripts
  *   <sessionsDir>/sessions/<id>/home/       the session's $HOME
  *   <sessionsDir>/sessions/<id>/repo/       the cloned repository
- *   <sessionsDir>/sessions/<id>/.ccm/       launch.json and other notes from Orbit
+ *   <sessionsDir>/sessions/<id>/.orb/       launch.json and other notes from Orbital
  *
- * Orbit sees this folder at sessionsDir; session containers get the parts they need,
+ * Orbital sees this folder at sessionsDir; session containers get the parts they need,
  * from the same Docker volume (by subpath) or host folder that backs sessionsDir.
  */
-import { chownSync, existsSync, mkdirSync } from 'node:fs';
+import { chownSync, existsSync, mkdirSync, readdirSync, renameSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import { config, IN_CONTAINER } from '../config.ts';
@@ -30,7 +30,7 @@ export async function backing(): Promise<Backing> {
 		const self = config.selfContainer ?? hostname();
 		const info = await inspectContainer(self);
 		if (!info) {
-			throw new Error(`Can't find Orbit's own container ("${self}"). Set CCM_SELF_CONTAINER, or CCM_SESSIONS_VOLUME / CCM_SESSIONS_HOST_PATH.`);
+			throw new Error(`Can't find Orbital's own container ("${self}"). Set ORB_SELF_CONTAINER, or ORB_SESSIONS_VOLUME / ORB_SESSIONS_HOST_PATH.`);
 		}
 		const m = info.Mounts.find((m) => m.Destination === config.sessionsDir);
 		if (!m) throw new Error(`Nothing is mounted at ${config.sessionsDir}. Mount a volume there (see compose.yaml).`);
@@ -40,7 +40,7 @@ export async function backing(): Promise<Backing> {
 		b = { kind: 'bind', hostPath: config.sessionsDir };
 	}
 	if (b.kind === 'volume' && !supportsSubpath(await version())) {
-		throw new Error('Session volumes need Docker Engine 26 or newer. Upgrade Docker, or bind-mount a host folder and set CCM_SESSIONS_HOST_PATH.');
+		throw new Error('Session volumes need Docker Engine 26 or newer. Upgrade Docker, or bind-mount a host folder and set ORB_SESSIONS_HOST_PATH.');
 	}
 	cached = b;
 	return b;
@@ -58,9 +58,26 @@ export const accountRel = (accountId: string) => `accounts/${accountId}`;
 export const sessionRel = (id: string) => `sessions/${id}`;
 
 export const abs = (rel: string) => join(config.sessionsDir, rel);
-export const metaDir = (id: string) => abs(`${sessionRel(id)}/.ccm`);
+export const metaDir = (id: string) => abs(`${sessionRel(id)}/.orb`);
 /** Where Claude keeps this session's transcripts (CLAUDE_CODE_PROJECT_DIR_NAME is the session id). */
 export const conversationsDir = (accountId: string, sessionId: string) => abs(`${accountRel(accountId)}/projects/${sessionId}`);
+
+/** Renames the .ccm folders from before the rename to Orbital to .orb, once, at start. */
+export function adoptLegacyDirs() {
+	for (const parent of ['sessions', 'accounts']) {
+		let ids: string[];
+		try {
+			ids = readdirSync(abs(parent));
+		} catch {
+			continue;
+		}
+		for (const id of ids) {
+			const from = abs(`${parent}/${id}/.ccm`);
+			const to = abs(`${parent}/${id}/.orb`);
+			if (existsSync(from) && !existsSync(to)) renameSync(from, to);
+		}
+	}
+}
 
 // Session containers run as the image's "node" user.
 const UID = 1000;

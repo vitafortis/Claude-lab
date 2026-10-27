@@ -4,10 +4,16 @@ import { resolve } from 'node:path';
 /** True when this process itself runs inside a container. */
 export const IN_CONTAINER = existsSync('/.dockerenv') || existsSync('/run/.containerenv');
 
-const dataDir = resolve(process.env.CCM_DATA_DIR ?? './data');
+/** ORB_<name>, or CCM_<name> as set up before the rename to Orbital. */
+function env(name: string): string | undefined {
+	return process.env[`ORB_${name}`] ?? process.env[`CCM_${name}`];
+}
+
+const dataDir = resolve(env('DATA_DIR') ?? './data');
 
 function defaultDockerHost(): string {
-	if (process.env.CCM_DOCKER_HOST) return process.env.CCM_DOCKER_HOST;
+	const host = env('DOCKER_HOST');
+	if (host) return host;
 	if (process.env.DOCKER_HOST) return process.env.DOCKER_HOST;
 	const candidates = [
 		'/var/run/docker.sock',
@@ -18,41 +24,44 @@ function defaultDockerHost(): string {
 	return `unix://${candidates.find((p) => existsSync(p)) ?? candidates[0]}`;
 }
 
+const adminEmail = env('ADMIN_EMAIL');
+const adminPassword = env('ADMIN_PASSWORD');
+
 export const config = {
 	dataDir,
 	/** Optional master secret. When unset, a random key is generated in the data dir. */
-	secretKey: process.env.CCM_SECRET_KEY,
+	secretKey: env('SECRET_KEY'),
 	/** Creates the first account on start (skips the setup wizard). */
 	bootstrapAdmin:
-		process.env.CCM_ADMIN_EMAIL && process.env.CCM_ADMIN_PASSWORD
-			? { email: process.env.CCM_ADMIN_EMAIL.trim(), password: process.env.CCM_ADMIN_PASSWORD, name: process.env.CCM_ADMIN_NAME?.trim() || null }
+		adminEmail && adminPassword
+			? { email: adminEmail.trim(), password: adminPassword, name: env('ADMIN_NAME')?.trim() || null }
 			: undefined,
 	/** `disabled` turns off the login screen — only for fully trusted networks. */
-	authDisabled: process.env.CCM_AUTH === 'disabled',
+	authDisabled: env('AUTH') === 'disabled',
 	/** `unix:///var/run/docker.sock` or `tcp://host:2375`. */
 	dockerHost: defaultDockerHost(),
 	/**
 	 * Where session data lives as this process sees it: Claude config per account, and per
 	 * session a home folder and the cloned repo. Session containers mount parts of it.
 	 */
-	sessionsDir: resolve(process.env.CCM_SESSIONS_DIR ?? (IN_CONTAINER ? '/sessions' : `${dataDir}/sessions`)),
+	sessionsDir: resolve(env('SESSIONS_DIR') ?? (IN_CONTAINER ? '/sessions' : `${dataDir}/sessions`)),
 	/**
 	 * How session containers reach sessionsDir. Normally found by inspecting our own container;
 	 * set one of these when that doesn't work. A volume needs Docker Engine 26+ (volume subpaths).
 	 */
-	sessionsVolume: process.env.CCM_SESSIONS_VOLUME?.trim() || undefined,
-	sessionsHostPath: process.env.CCM_SESSIONS_HOST_PATH?.trim() || undefined,
+	sessionsVolume: env('SESSIONS_VOLUME')?.trim() || undefined,
+	sessionsHostPath: env('SESSIONS_HOST_PATH')?.trim() || undefined,
 	/** The image session containers run. Overridable in Settings. */
-	sessionImage: process.env.CCM_SESSION_IMAGE?.trim() || 'ghcr.io/vitafortis/cc-modern-session:latest',
+	sessionImage: env('SESSION_IMAGE')?.trim() || 'ghcr.io/vitafortis/orbital-session:latest',
 	/** For Codex and Gemini sessions: the same image with those CLIs added. */
-	agentsImage: process.env.CCM_AGENTS_IMAGE?.trim() || 'ghcr.io/vitafortis/cc-modern-session:latest-all',
-	sessionNetwork: process.env.CCM_SESSION_NETWORK?.trim() || '',
+	agentsImage: env('AGENTS_IMAGE')?.trim() || 'ghcr.io/vitafortis/orbital-session:latest-all',
+	sessionNetwork: env('SESSION_NETWORK')?.trim() || '',
 	/** Labels our containers so several installs can share one Docker host. */
-	instance: process.env.CCM_INSTANCE?.trim() || 'cc-modern',
+	instance: env('INSTANCE')?.trim() || 'orbital',
 	/** Our own container (name or id), when the hostname isn't it. */
-	selfContainer: process.env.CCM_SELF_CONTAINER?.trim() || undefined,
+	selfContainer: env('SELF_CONTAINER')?.trim() || undefined,
 	/** A GitHub OAuth app (device flow enabled) for "Sign in with GitHub"; PATs work without it. */
-	githubClientId: process.env.CCM_GITHUB_CLIENT_ID?.trim() || undefined,
+	githubClientId: env('GITHUB_CLIENT_ID')?.trim() || undefined,
 	/** Linear's GraphQL endpoint (override for testing against a mock). */
-	linearApiUrl: process.env.CCM_LINEAR_API_URL?.trim() || 'https://api.linear.app/graphql'
+	linearApiUrl: env('LINEAR_API_URL')?.trim() || 'https://api.linear.app/graphql'
 };

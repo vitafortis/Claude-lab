@@ -1,6 +1,6 @@
 /**
  * GitHub accounts: a personal access token (classic or fine-grained), or "Sign in with
- * GitHub" through the device flow when CCM_GITHUB_CLIENT_ID names an OAuth app.
+ * GitHub" through the device flow when ORB_GITHUB_CLIENT_ID names an OAuth app.
  * Tokens list repositories and are handed to session containers for clone and push.
  */
 import { randomToken } from './crypto.ts';
@@ -19,7 +19,7 @@ async function ghFetch(token: string | undefined, path: string): Promise<Respons
 			accept: 'application/vnd.github+json',
 			...(token ? { authorization: `Bearer ${token}` } : {}),
 			'x-github-api-version': '2022-11-28',
-			'user-agent': 'cc-modern'
+			'user-agent': 'orbital'
 		},
 		signal: AbortSignal.timeout(15_000)
 	}).catch((err: unknown) => {
@@ -358,7 +358,7 @@ export const deviceFlowEnabled = () => !!clientId();
 async function postForm<T>(url: string, form: Record<string, string>): Promise<T> {
 	const res = await fetch(url, {
 		method: 'POST',
-		headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'cc-modern' },
+		headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'orbital' },
 		body: new URLSearchParams(form),
 		signal: AbortSignal.timeout(15_000)
 	});

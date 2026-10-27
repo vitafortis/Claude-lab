@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { chmodSync, mkdirSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from './config.ts';
@@ -28,11 +28,19 @@ import type {
 
 let handle: DatabaseSync | undefined;
 
+/** Takes over the database from before the rename to Orbital (cc-modern.db and its WAL files). */
+function adoptLegacyDb(dbPath: string) {
+	const legacy = join(config.dataDir, 'cc-modern.db');
+	if (existsSync(dbPath) || !existsSync(legacy)) return;
+	for (const suffix of ['', '-wal', '-shm']) if (existsSync(legacy + suffix)) renameSync(legacy + suffix, dbPath + suffix);
+}
+
 /** Opens the store on first use, so importing this module (e.g. during build) has no side effects. */
 function db(): DatabaseSync {
 	if (handle) return handle;
 	mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
-	const dbPath = join(config.dataDir, 'cc-modern.db');
+	const dbPath = join(config.dataDir, 'orbital.db');
+	adoptLegacyDb(dbPath);
 	handle = new DatabaseSync(dbPath);
 	try {
 		chmodSync(dbPath, 0o600);

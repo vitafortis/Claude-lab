@@ -5,7 +5,7 @@ import { findUserByEmail, getPasswordHash } from '#lib/server/store.ts';
 import type { RequestHandler } from './$types';
 
 // Verified against when the user doesn't exist, so timing doesn't reveal valid emails.
-const DUMMY_HASH = hashPassword('cc-modern-dummy-password');
+const DUMMY_HASH = hashPassword('orbital-dummy-password');
 
 export const POST: RequestHandler = async ({ request, cookies, locals, getClientAddress }) => {
 	if (throttled(getClientAddress())) return json({ message: 'Too many attempts — wait a few minutes' }, { status: 429 });

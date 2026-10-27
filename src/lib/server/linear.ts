@@ -45,7 +45,7 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}, ke
 	if (!key) throw new BadRequest('Connect Linear first');
 	const res = await fetch(config.linearApiUrl, {
 		method: 'POST',
-		headers: { 'content-type': 'application/json', authorization: key, 'user-agent': 'cc-modern' },
+		headers: { 'content-type': 'application/json', authorization: key, 'user-agent': 'orbital' },
 		body: JSON.stringify({ query, variables }),
 		signal: AbortSignal.timeout(20_000)
 	});
@@ -153,7 +153,7 @@ async function moveToStarted(teamId: string, issue: LinearIssue) {
 	if (started) await gql('mutation($id: String!, $state: String!) { issueUpdate(id: $id, input: { stateId: $state }) { success } }', { id: issue.id, state: started.id });
 }
 
-/** The address of Orbit for links in comments: Settings, or the last one a browser used. */
+/** The address of Orbital for links in comments: Settings, or the last one a browser used. */
 export function publicUrl(): string | null {
 	return getSettings().publicUrl || getKv<string | null>('origin:last', null);
 }
@@ -199,9 +199,9 @@ async function spawn(rule: LinearRule, issue: LinearIssue) {
 	if (rule.comment) {
 		const base = publicUrl();
 		const where = base ? `[${session.name}](${base}/s/${session.id})` : `“${session.name}”`;
-		await comment(issue.id, `🤖 ${AGENT_LABEL[getAccount(accountId)?.agent ?? 'claude']} started on this in Orbit: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
+		await comment(issue.id, `🤖 ${AGENT_LABEL[getAccount(accountId)?.agent ?? 'claude']} started on this in Orbital: ${where}, on branch \`${branch}\`.`).catch((e) => notes.push(`comment: ${e.message}`));
 	}
-	if (notes.length) console.warn(`[cc-modern] Linear ${issue.identifier}: ${notes.join('; ')}`);
+	if (notes.length) console.warn(`[orbital] Linear ${issue.identifier}: ${notes.join('; ')}`);
 }
 
 let running = false;

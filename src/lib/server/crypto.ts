@@ -9,12 +9,13 @@ const VERSION = 'v1';
 let cachedKey: Buffer | undefined;
 
 /**
- * The master key protects every stored credential. It comes from CCM_SECRET_KEY when set,
+ * The master key protects every stored credential. It comes from ORB_SECRET_KEY when set,
  * otherwise from a random 256-bit key file created (mode 0600) on first start.
  */
 function masterKey(): Buffer {
 	if (cachedKey) return cachedKey;
 	if (config.secretKey) {
+		// The salt keeps the old name: changing it would lock out every stored credential.
 		cachedKey = scryptSync(config.secretKey, 'cc-modern/master-key', 32);
 		return cachedKey;
 	}
