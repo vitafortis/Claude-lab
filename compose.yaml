@@ -1,4 +1,4 @@
-# Orbit (images named cc-modern) — Claude Code sessions on your own hardware.
+# Orbital — Claude Code sessions on your own hardware.
 #
 #   docker compose up -d
 #   open http://<this-host>:3050 and create the local admin account
@@ -6,34 +6,34 @@
 # Everything else is set up in the web UI: model and GitHub accounts, sign-in (password,
 # single sign-on, reverse proxy headers, or off), session images, networks and limits.
 services:
-  cc-modern:
-    image: ghcr.io/vitafortis/cc-modern:latest
-    container_name: cc-modern
+  orbital:
+    image: ghcr.io/vitafortis/orbital:latest
+    container_name: orbital
     restart: unless-stopped
     ports:
       - "3050:3000"
     # All optional. Settings in the UI take over from these once saved.
     # environment:
       # Create the local admin here instead of in the setup screen.
-      # CCM_ADMIN_EMAIL: you@example.com
-      # CCM_ADMIN_PASSWORD: ${CCM_ADMIN_PASSWORD}
+      # ORB_ADMIN_EMAIL: you@example.com
+      # ORB_ADMIN_PASSWORD: ${ORB_ADMIN_PASSWORD}
       # Manage the credential encryption key yourself. Otherwise a random key is
-      # generated at /data/secret.key: back up the cc-modern-data volume.
-      # CCM_SECRET_KEY: change-me-to-a-long-random-string
+      # generated at /data/secret.key: back up the orbital-data volume.
+      # ORB_SECRET_KEY: change-me-to-a-long-random-string
       # Recovery: turns sign-in off whatever the UI says.
-      # CCM_AUTH: disabled
+      # ORB_AUTH: disabled
     volumes:
       # The database (accounts, settings, encrypted tokens) and the key file.
-      - cc-modern-data:/data
+      - orbital-data:/data
       # Session data: each session's repo and home folder, and each model account's
       # login and conversations. Session containers mount their part of this volume.
-      - cc-modern-sessions:/sessions
-      # Orbit creates, starts and stops the session containers. Anyone who can sign
-      # in to Orbit can run code on this Docker host: keep it on your LAN, a VPN, or
+      - orbital-sessions:/sessions
+      # Orbital creates, starts and stops the session containers. Anyone who can sign
+      # in to Orbital can run code on this Docker host: keep it on your LAN, a VPN, or
       # behind your reverse proxy's sign-in.
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
-  cc-modern-data:
-  cc-modern-sessions:
-    name: cc-modern-sessions
+  orbital-data:
+  orbital-sessions:
+    name: orbital-sessions

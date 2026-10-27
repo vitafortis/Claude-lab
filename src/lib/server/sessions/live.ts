@@ -41,7 +41,7 @@ async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 's
 		return { state: s.status === 'starting' ? 'starting' : 'unknown', tail: live.get(s.id)?.tail ?? [], rcUrl: s.rcUrl, links: [], git: gitCache.get(s.id) ?? null };
 	}
 	try {
-		const r = await exec(s.containerId, ['ccm-status', ...(withGit ? ['--git'] : [])], { user: 'node', timeoutMs: 8000 });
+		const r = await exec(s.containerId, ['orb-status', ...(withGit ? ['--git'] : [])], { user: 'node', timeoutMs: 8000 });
 		const p = parseProbe(r.stdout);
 		if (p.git || withGit) gitCache.set(s.id, p.git);
 		const rcUrl = findRcUrl(p.lines) ?? s.rcUrl;
@@ -53,7 +53,7 @@ async function probe(s: Session, withGit: boolean): Promise<Pick<SessionLive, 's
 }
 
 async function pollOnce() {
-	await reconcile().catch((err) => console.error('[cc-modern] reconcile failed:', err instanceof Error ? err.message : err));
+	await reconcile().catch((err) => console.error('[orbital] reconcile failed:', err instanceof Error ? err.message : err));
 	if (tick % 30 === 0) await sweepLogins().catch(() => {});
 	const withGit = tick++ % GIT_EVERY === 0;
 	const sessions = listSessions();
@@ -128,9 +128,9 @@ export async function aiSummary(id: string): Promise<NonNullable<SessionLive['ai
 		[
 			'bash',
 			'-c',
-			'cd /tmp && claude -p --model haiku --no-session-persistence --max-turns 1 "$CCM_SUMMARY_PROMPT" < /session/.ccm/summary-input.txt'
+			'cd /tmp && claude -p --model haiku --no-session-persistence --max-turns 1 "$ORB_SUMMARY_PROMPT" < /session/.orb/summary-input.txt'
 		],
-		{ user: 'node', env: [`CCM_SUMMARY_PROMPT=${SUMMARY_PROMPT}`], timeoutMs: 120_000 }
+		{ user: 'node', env: [`ORB_SUMMARY_PROMPT=${SUMMARY_PROMPT}`], timeoutMs: 120_000 }
 	);
 	const out = r.stdout.trim();
 	if (r.exitCode !== 0 || !out) throw new Error((r.stderr || r.stdout).trim().split('\n').slice(-3).join(' ') || 'Claude did not answer');

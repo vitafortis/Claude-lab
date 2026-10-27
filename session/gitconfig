@@ -1,9 +1,9 @@
 # System git config for session containers. Pushes and private clones authenticate with
-# the session's GitHub account: cc·modern keeps its token in /session/.ccm/github-token
-# (current while the session runs) and gh's login in /session/.ccm/gh (GH_CONFIG_DIR).
+# the session's GitHub account: Orbital keeps its token in /session/.orb/github-token
+# (current while the session runs) and gh's login in /session/.orb/gh (GH_CONFIG_DIR).
 # The same settings also come through the environment (GIT_CONFIG_*), for older images.
 [credential "https://github.com"]
-	helper = "!f() { test \"$1\" = get || exit 0; t=$(cat /session/.ccm/github-token 2>/dev/null); test -n \"$t\" || exit 0; echo username=x-access-token; echo \"password=$t\"; }; f"
+	helper = "!f() { test \"$1\" = get || exit 0; t=$(cat /session/.orb/github-token 2>/dev/null); test -n \"$t\" || exit 0; echo username=x-access-token; echo \"password=$t\"; }; f"
 [url "https://github.com/"]
 	insteadOf = git@github.com:
 	insteadOf = ssh://git@github.com/

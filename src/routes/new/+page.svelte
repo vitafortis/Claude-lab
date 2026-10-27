@@ -217,7 +217,7 @@
 	// picked repo used last time (a matching profile still wins).
 	// `token`: the GitHub token picked by hand for the repo, over the one chosen for it.
 	type Choices = { token?: string; account: string; model: string; permissionMode: PermissionMode; remoteControl: boolean };
-	const MEMORY = 'ccm.newSession';
+	const MEMORY = 'orb.newSession';
 	function recall(): { last?: Choices; repos?: Record<string, Choices> } {
 		try {
 			return JSON.parse(localStorage.getItem(MEMORY) ?? '{}');
@@ -288,7 +288,7 @@
 	}
 </script>
 
-<svelte:head><title>New session · Orbit</title></svelte:head>
+<svelte:head><title>New session · Orbital</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="New session" description="Clone a repo into its own container and start Claude Code, Codex or Gemini there." />

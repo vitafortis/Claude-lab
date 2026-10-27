@@ -4,11 +4,17 @@ import { authenticate, proxyIdentity, startSession } from '#lib/server/auth.ts';
 import { publicUrl } from '#lib/server/origin.ts';
 import { startLinear } from '#lib/server/linear.ts';
 import { startLive } from '#lib/server/sessions/live.ts';
+import { adoptLegacyDirs } from '#lib/server/sessions/storage.ts';
 import { handleUpgrade } from '#lib/server/terminal/upgrade.ts';
 
 export const init: ServerInit = () => {
 	// server.js passes WebSocket upgrades (terminals) here.
-	globalThis.__ccmUpgrade = handleUpgrade;
+	globalThis.__orbUpgrade = handleUpgrade;
+	try {
+		adoptLegacyDirs();
+	} catch (err) {
+		console.error('[orbital] renaming .ccm folders failed:', err);
+	}
 	startLive();
 	startLinear();
 };

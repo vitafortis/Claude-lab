@@ -15,7 +15,7 @@ export const GET: RequestHandler = async ({ url, locals, cookies }) => {
 		target = to;
 	} catch (err) {
 		const msg = err instanceof BadRequest ? err.message : 'Single sign-on failed to start';
-		if (!(err instanceof BadRequest)) console.error('[cc-modern] SSO:', err);
+		if (!(err instanceof BadRequest)) console.error('[orbital] SSO:', err);
 		target = `/login?error=${encodeURIComponent(msg)}`;
 	}
 	// A plain response: redirect() refuses other sites, and the provider is one.

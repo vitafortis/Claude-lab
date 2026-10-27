@@ -20,7 +20,7 @@ export const AGENT_HOME: Record<Agent, { mount: string; env: string[] }> = {
 };
 
 // The service account key is written into the account's folder, which only its sessions mount.
-const VERTEX_CREDENTIALS = '.ccm/gcp-credentials.json';
+const VERTEX_CREDENTIALS = '.orb/gcp-credentials.json';
 
 function pins(c: Record<string, string>): string[] {
 	return [
@@ -70,7 +70,7 @@ export function providerEnv(account: ModelAccount, secrets: Record<string, strin
 				...pins(c)
 			];
 		case 'openai_api_key':
-			// ccm-launch stores it with `codex login --with-api-key` before Codex starts.
+			// orb-launch stores it with `codex login --with-api-key` before Codex starts.
 			return secrets.apiKey ? [`OPENAI_API_KEY=${secrets.apiKey}`] : [];
 		case 'gemini_api_key':
 			return secrets.apiKey ? [`GEMINI_API_KEY=${secrets.apiKey}`] : [];
@@ -105,8 +105,8 @@ export function agentSetup(accountId: string): AgentSetup {
 	return {
 		account,
 		agent: account.agent,
-		// CCM_AGENT tells ccm-launch, ccm-login and seed.mjs which CLI this container runs.
-		env: [`CCM_AGENT=${account.agent}`, ...home.env, ...providerEnv(account, secrets)],
+		// ORB_AGENT tells orb-launch, orb-login and seed.mjs which CLI this container runs.
+		env: [`ORB_AGENT=${account.agent}`, ...home.env, ...providerEnv(account, secrets)],
 		mount: home.mount,
 		image: account.agent === 'claude' ? settings.sessionImage : settings.agentsImage
 	};

@@ -38,10 +38,10 @@ import { hasConversations } from './transcripts.ts';
 import type { Session, Settings } from '#lib/types.ts';
 
 export const LABELS = {
-	instance: 'cc-modern.instance',
-	kind: 'cc-modern.kind',
-	session: 'cc-modern.session',
-	account: 'cc-modern.account'
+	instance: 'orbital.instance',
+	kind: 'orbital.kind',
+	session: 'orbital.session',
+	account: 'orbital.account'
 } as const;
 
 export const workdir = sessionWorkdir;
@@ -123,14 +123,14 @@ function containerSpec(s: Session, settings: Settings, agent: AgentSetup, mounts
 		`HOME=/session/home`,
 		// Transcripts land in accounts/<account>/projects/<session id>, whatever the folder.
 		`CLAUDE_CODE_PROJECT_DIR_NAME=${s.id}`,
-		`CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX=cc-modern`,
-		`CCM_SESSION_ID=${s.id}`,
-		`CCM_REPO_URL=${s.repoUrl}`,
-		`CCM_REPO_DIR=${workdir(s)}`,
-		...(s.baseBranch ? [`CCM_BASE_BRANCH=${s.baseBranch}`] : []),
-		...(s.newBranch ? [`CCM_NEW_BRANCH=${s.newBranch}`] : []),
-		...(s.checkoutPr ? [`CCM_PR_NUMBER=${s.checkoutPr}`] : []),
-		...(s.permissionMode === 'bypassPermissions' ? ['CCM_BYPASS_PERMISSIONS=1'] : []),
+		`CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX=orbital`,
+		`ORB_SESSION_ID=${s.id}`,
+		`ORB_REPO_URL=${s.repoUrl}`,
+		`ORB_REPO_DIR=${workdir(s)}`,
+		...(s.baseBranch ? [`ORB_BASE_BRANCH=${s.baseBranch}`] : []),
+		...(s.newBranch ? [`ORB_NEW_BRANCH=${s.newBranch}`] : []),
+		...(s.checkoutPr ? [`ORB_PR_NUMBER=${s.checkoutPr}`] : []),
+		...(s.permissionMode === 'bypassPermissions' ? ['ORB_BYPASS_PERMISSIONS=1'] : []),
 		...parseEnvLines(settings.extraEnv),
 		...agent.env,
 		...githubEnv(s.githubAccountId)
@@ -171,7 +171,7 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 	try {
 		const settings = getSettings();
 		const b = await backing();
-		ensureDirs(accountRel(s.accountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.ccm`);
+		ensureDirs(accountRel(s.accountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.orb`);
 		writeGithubCredentials(s);
 		const agent = agentSetup(s.accountId); // fails early if the account is gone
 		await ensureImage(agent.image);
@@ -228,7 +228,7 @@ export async function relaunchAgent(id: string, launch?: LaunchMode): Promise<Se
 	}
 	writeLaunch(session, agent, launch ?? defaultLaunch(session));
 	writeGithubCredentials(session);
-	const r = await exec(container, ['tmux', 'respawn-pane', '-k', '-t', 'main', 'ccm-launch'], { user: 'node' });
+	const r = await exec(container, ['tmux', 'respawn-pane', '-k', '-t', 'main', 'orb-launch'], { user: 'node' });
 	if (r.exitCode !== 0) throw new DockerError(r.stderr.trim() || 'Could not restart the agent');
 	return session;
 }

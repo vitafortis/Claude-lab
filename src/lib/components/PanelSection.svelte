@@ -11,7 +11,7 @@
 		children
 	}: { id: string; title: string; icon?: Component<{ class?: string }>; action?: Snippet; children: Snippet } = $props();
 
-	const key = $derived(`ccm.panel.${id}`);
+	const key = $derived(`orb.panel.${id}`);
 	let open = $state(true);
 	onMount(() => {
 		try {

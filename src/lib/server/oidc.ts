@@ -46,7 +46,7 @@ type Pending = { verifier: string; nonce: string; redirectUri: string; next: str
 const pending = new Map<string, Pending>();
 
 /** Holds the sign-in's state, binding the callback to the browser that started it. */
-export const STATE_COOKIE = 'ccm_oidc';
+export const STATE_COOKIE = 'orb_oidc';
 
 const b64url = (b: Buffer) => b.toString('base64url');
 
@@ -139,7 +139,7 @@ export async function finishSignIn(params: URLSearchParams, cookieState: string 
 	if (claims.email_verified === false) throw new BadRequest(`${email} is not verified with the provider`);
 	const groups = claimList(claim(id, s.oidc.groupsClaim) ?? claim(info, s.oidc.groupsClaim));
 	const { allowed, admin } = accessFor(s.access, email, groups);
-	if (!allowed) throw new BadRequest(`${email} isn't allowed to sign in to Orbit. An admin can allow it under Settings → Sign-in.`);
+	if (!allowed) throw new BadRequest(`${email} isn't allowed to sign in to Orbital. An admin can allow it under Settings → Sign-in.`);
 	const name = typeof claims.name === 'string' ? claims.name : typeof claims.preferred_username === 'string' ? claims.preferred_username : null;
 	return { user: upsertExternalUser({ email, name, source: 'oidc', admin }), next: p.next };
 }

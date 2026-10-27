@@ -32,7 +32,7 @@
 	});
 </script>
 
-<svelte:head><title>Sessions · Orbit</title></svelte:head>
+<svelte:head><title>Sessions · Orbital</title></svelte:head>
 
 <div class="h-full overflow-y-auto">
 	<PageHeader title="Sessions" {description}>

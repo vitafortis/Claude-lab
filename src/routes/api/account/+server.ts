@@ -10,7 +10,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Lets the signed-in user change their name, email and password. */
 export const PUT: RequestHandler = handler(async ({ request, locals, cookies }) => {
 	const user = locals.user;
-	if (!user || user.id === 'open') throw new BadRequest('Accounts are disabled (CCM_AUTH=disabled)');
+	if (!user || user.id === 'open') throw new BadRequest('Accounts are disabled (ORB_AUTH=disabled)');
 	const b = await body(request);
 	const patch: Parameters<typeof updateUser>[1] = {};
 	if (typeof b.name === 'string') patch.name = b.name.trim() || null;

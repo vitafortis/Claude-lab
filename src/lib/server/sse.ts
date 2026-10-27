@@ -28,7 +28,7 @@ export function sseResponse(
 		try {
 			cleanup?.();
 		} catch (err) {
-			console.error('[cc-modern] SSE cleanup failed', err);
+			console.error('[orbital] SSE cleanup failed', err);
 		}
 		try {
 			ctrl.close();

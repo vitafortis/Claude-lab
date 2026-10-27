@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Runs in the sign-in container's tmux pane: signs the agent ($CCM_AGENT) in, with the
+# Runs in the sign-in container's tmux pane: signs the agent ($ORB_AGENT) in, with the
 # credentials landing in the account's config folder, shared by that account's sessions.
 set -u
 dim=$'\e[2m'; reset=$'\e[0m'
-node /usr/local/lib/ccm/seed.mjs || true
+node /usr/local/lib/orb/seed.mjs || true
 
-case "${CCM_AGENT:-claude}" in
+case "${ORB_AGENT:-claude}" in
 	codex)
 		echo "${dim}Signing in to ChatGPT for Codex. Open the link below, sign in, and enter the code.${reset}"
 		echo
@@ -31,5 +31,5 @@ case "${CCM_AGENT:-claude}" in
 		;;
 esac
 echo
-echo "${dim}Done? Close this window in cc·modern. To try again, run ${reset}${again}"
+echo "${dim}Done? Close this window in Orbital. To try again, run ${reset}${again}"
 exec bash -l

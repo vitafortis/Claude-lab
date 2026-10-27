@@ -251,7 +251,7 @@
 	]);
 </script>
 
-<svelte:head><title>{s.name} · Orbit</title></svelte:head>
+<svelte:head><title>{s.name} · Orbital</title></svelte:head>
 
 <div class="flex h-full min-h-0 flex-col">
 	<!-- Header -->

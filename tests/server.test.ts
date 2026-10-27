@@ -18,7 +18,7 @@ test('demux splits stdout and stderr frames', () => {
 });
 
 test('parseImageRef handles registries with ports and digests', () => {
-	assert.deepEqual(parseImageRef('ghcr.io/vitafortis/cc-modern-session:latest'), { fromImage: 'ghcr.io/vitafortis/cc-modern-session', tag: 'latest' });
+	assert.deepEqual(parseImageRef('ghcr.io/vitafortis/orbital-session:latest'), { fromImage: 'ghcr.io/vitafortis/orbital-session', tag: 'latest' });
 	assert.deepEqual(parseImageRef('registry.lan:5000/session'), { fromImage: 'registry.lan:5000/session', tag: 'latest' });
 	assert.deepEqual(parseImageRef('img@sha256:abc'), { fromImage: 'img', tag: 'sha256:abc' });
 });
@@ -46,7 +46,7 @@ test('parseEnvLines keeps KEY=value lines only', () => {
 });
 
 test('sessionTokenFromHeader', () => {
-	assert.equal(sessionTokenFromHeader('a=1; ccm_session=tok%3D; b=2'), 'tok=');
+	assert.equal(sessionTokenFromHeader('a=1; orb_session=tok%3D; b=2'), 'tok=');
 	assert.equal(sessionTokenFromHeader(undefined), undefined);
 });
 

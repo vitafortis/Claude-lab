@@ -268,14 +268,17 @@
 }
 
 @layer utilities {
-	/* Every session glows by its state: green while it runs (breathing while the agent works),
-	   yellow pulsing when it needs you, red on an error, a quiet gray when it's stopped or its
-	   terminal is disconnected. --glow is the colour; the -inset form frames the terminal, which
+	/* Every session glows by its state, in the same colour as its dot (STATE_META): blue
+	   breathing while the agent works, green when idle, yellow pulsing when it needs you, red
+	   on an error, a quiet gray when it's stopped or its terminal is disconnected. --glow is the colour; the -inset form frames the terminal, which
 	   fills its area edge to edge. Motion pauses for people who turn animations off. */
 	.glow,
 	.glow-inset,
 	.glow-sm {
 		--glow: var(--muted-foreground);
+	}
+	.glow-blue {
+		--glow: var(--primary);
 	}
 	.glow-green {
 		--glow: var(--success);

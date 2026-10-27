@@ -458,7 +458,7 @@
 	async function removeGithub(a: GithubAccount) {
 		const ok = await confirmAction({
 			title: `Disconnect ${githubLabel(a)}?`,
-			body: 'Orbit forgets the token. Running sessions keep working until they restart. Revoke the token on GitHub too if you no longer need it.',
+			body: 'Orbital forgets the token. Running sessions keep working until they restart. Revoke the token on GitHub too if you no longer need it.',
 			confirmLabel: 'Disconnect',
 			danger: true
 		});
@@ -468,7 +468,7 @@
 	}
 </script>
 
-<svelte:head><title>Accounts · Orbit</title></svelte:head>
+<svelte:head><title>Accounts · Orbital</title></svelte:head>
 
 {#snippet statusBadge(a: ModelAccount)}
 	{@const signIn = ACCOUNT_KINDS[a.kind].signIn}

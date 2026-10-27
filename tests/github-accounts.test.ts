@@ -4,9 +4,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// The store opens its database on first use, under CCM_DATA_DIR.
-process.env.CCM_DATA_DIR = mkdtempSync(join(tmpdir(), 'ccm-test-'));
-process.env.CCM_SECRET_KEY = 'test-key';
+// The store opens its database on first use, under ORB_DATA_DIR.
+process.env.ORB_DATA_DIR = mkdtempSync(join(tmpdir(), 'orb-test-'));
+process.env.ORB_SECRET_KEY = 'test-key';
 const store = await import('#lib/server/store.ts');
 
 const input = (token: string, kind: 'pat' | 'oauth' = 'pat') => ({

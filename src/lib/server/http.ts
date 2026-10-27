@@ -18,7 +18,7 @@ export function handler<E>(fn: (event: E) => Promise<Response> | Response) {
 			if (err instanceof Forbidden) return json({ message: err.message }, { status: 403 });
 			if (err && typeof err === 'object' && 'status' in err && 'location' in err) throw err;
 			if (err instanceof DockerError) return json({ message: err.message }, { status: 502 });
-			console.error('[cc-modern]', err);
+			console.error('[orbital]', err);
 			return json({ message: err instanceof Error ? err.message : String(err) }, { status: 500 });
 		}
 	};

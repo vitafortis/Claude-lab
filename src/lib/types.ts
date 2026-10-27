@@ -304,7 +304,7 @@ export interface Settings {
 	defaultRemoteControl: boolean;
 	/** Extra KEY=value lines passed to every session container. */
 	extraEnv: string;
-	/** How Orbit is reached from a browser: links in Linear comments, the SSO callback. */
+	/** How Orbital is reached from a browser: links in Linear comments, the SSO callback. */
 	publicUrl: string;
 	/** A GitHub OAuth app (device flow enabled) for "Sign in with GitHub". */
 	githubClientId: string;
@@ -332,7 +332,7 @@ export interface User {
 
 /** Sign-in settings, managed under Settings → Sign-in. */
 export interface AuthSettings {
-	/** Off: anyone who can reach Orbit uses it as the admin, e.g. behind a proxy that already signs people in. */
+	/** Off: anyone who can reach Orbital uses it as the admin, e.g. behind a proxy that already signs people in. */
 	required: boolean;
 	/** Show the email and password form. The local admin can always use /login?local. */
 	passwordForm: boolean;

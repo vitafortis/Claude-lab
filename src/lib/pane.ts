@@ -2,7 +2,7 @@ import type { Agent, GitState, PaneState } from './types.ts';
 
 const RS = '\x1e';
 
-/** Splits ccm-status output (see session/bin/ccm-status) into its sections. */
+/** Splits orb-status output (see session/bin/orb-status) into its sections. */
 export function parseProbe(out: string): { command: string; lines: string[]; git: GitState | null } {
 	const [cmd = '', pane = '', porcelain, shortstat] = out.split(`\n${RS}\n`);
 	const lines = pane.replace(/\s+$/, '').split('\n');
@@ -61,7 +61,7 @@ const WAITING = [
 ];
 
 // The process tmux reports while each agent runs. Codex and Gemini start from npm's node
-// wrappers, so for them "node" is the agent (ccm-launch's own node step takes a moment).
+// wrappers, so for them "node" is the agent (orb-launch's own node step takes a moment).
 const AGENT_COMMAND: Record<Agent, RegExp> = {
 	claude: /^claude\b/,
 	codex: /^(?:codex|node)\b/,
@@ -78,10 +78,10 @@ export function paneState(command: string, lines: string[], agent: Agent = 'clau
 		if (WAITING.some((r) => r.test(recent))) return 'waiting';
 		return 'idle';
 	}
-	// ccm-launch cloning (git) or seeding config (node) before the agent starts.
+	// orb-launch cloning (git) or seeding config (node) before the agent starts.
 	if (command === 'git' || command === 'node') return 'starting';
 	if (/^(?:ba|z|da)?sh$/.test(command)) {
-		// ccm-launch prints this when the agent exits; before that, the shell is still launching.
+		// orb-launch prints this when the agent exits; before that, the shell is still launching.
 		return lines.some((l) => /── \w+ exited/i.test(l)) ? 'shell' : 'starting';
 	}
 	return command ? 'unknown' : 'starting';

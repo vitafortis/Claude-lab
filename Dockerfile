@@ -8,19 +8,19 @@ COPY package.json pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 COPY . .
 # The release version shown in the sidebar (the image workflow passes it; local builds say -dev).
-ARG CCM_VERSION=
-ENV CCM_VERSION=$CCM_VERSION
+ARG ORB_VERSION=
+ENV ORB_VERSION=$ORB_VERSION
 RUN pnpm build && pnpm prune --prod
 
 FROM node:24-alpine
-LABEL org.opencontainers.image.source=https://github.com/vitafortis/Claude-lab
+LABEL org.opencontainers.image.source=https://github.com/vitafortis/Orbital
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    CCM_DATA_DIR=/data \
-    CCM_SESSIONS_DIR=/sessions \
+    ORB_DATA_DIR=/data \
+    ORB_SESSIONS_DIR=/sessions \
     NODE_OPTIONS=--disable-warning=ExperimentalWarning \
-    CCM_RUN_AS=node
+    ORB_RUN_AS=node
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY package.json server.js ./

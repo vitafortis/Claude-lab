@@ -29,7 +29,7 @@
 	} = $props();
 
 	// Skipping GitHub is a choice per browser: public repos need no token.
-	const SKIP_KEY = 'ccm.skipGithub';
+	const SKIP_KEY = 'orb.skipGithub';
 	let skippedGithub = $state(false);
 	onMount(() => {
 		try {

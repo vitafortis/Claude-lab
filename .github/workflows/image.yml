@@ -1,6 +1,6 @@
 name: Image
 
-# Publishes ghcr.io/<owner>/cc-modern (the app) and ghcr.io/<owner>/cc-modern-session
+# Publishes ghcr.io/<owner>/orbital (the app) and ghcr.io/<owner>/orbital-session
 # (what sessions run) for linux/amd64 and linux/arm64. The session image also comes with
 # Codex CLI and Gemini CLI added, under the same tags with -all (e.g. :latest-all).
 #   push to main  -> :latest, :main, :<major>.<minor>.<run number> (minor from package.json)
@@ -29,16 +29,16 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: cc-modern
+          - name: orbital
             context: .
             description: Claude Code sessions in containers on your own hardware, with web terminals
-          - name: cc-modern-session
+          - name: orbital-session
             context: ./session
-            description: The cc·modern session runtime - Claude Code, tmux, git and gh
+            description: The Orbital session runtime - Claude Code, tmux, git and gh
             agents: claude
-          - name: cc-modern-session
+          - name: orbital-session
             context: ./session
-            description: The cc·modern session runtime with Claude Code, Codex CLI and Gemini CLI
+            description: The Orbital session runtime with Claude Code, Codex CLI and Gemini CLI
             agents: claude codex gemini
             suffix: -all
     steps:
@@ -85,7 +85,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            CCM_VERSION=${{ steps.ver.outputs.version }}
+            ORB_VERSION=${{ steps.ver.outputs.version }}
             AGENTS=${{ matrix.agents }}
           cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}

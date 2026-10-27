@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# The image every cc·modern session runs in: Claude Code inside tmux, with git, gh and
+# The image every Orbital session runs in: Claude Code inside tmux, with git, gh and
 # the usual tools. One image is shared by all sessions; their repos, homes and agent
 # config live in the sessions volume, so containers are disposable.
 #
@@ -34,7 +34,7 @@ RUN set -e; \
 COPY tmux.conf /etc/tmux.conf
 COPY gitconfig /etc/gitconfig
 COPY --chmod=755 bin/ /usr/local/bin/
-COPY lib/ /usr/local/lib/ccm/
+COPY lib/ /usr/local/lib/orb/
 
 RUN mkdir -p /workspace /claude /codex /gemini && chown node:node /workspace /claude /codex /gemini
 
@@ -45,7 +45,7 @@ ENV LANG=C.UTF-8 \
 	DISABLE_AUTOUPDATER=1 \
 	CLAUDE_CONFIG_DIR=/claude
 
-LABEL org.opencontainers.image.source=https://github.com/vitafortis/Claude-lab
+LABEL org.opencontainers.image.source=https://github.com/vitafortis/Orbital
 USER node
 WORKDIR /workspace
-ENTRYPOINT ["tini", "--", "/usr/local/bin/ccm-entrypoint"]
+ENTRYPOINT ["tini", "--", "/usr/local/bin/orb-entrypoint"]
