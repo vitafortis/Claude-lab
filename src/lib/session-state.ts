@@ -2,37 +2,29 @@ import type { Session, SessionLive } from './types.ts';
 
 export type DisplayState = 'working' | 'waiting' | 'idle' | 'shell' | 'starting' | 'stopped' | 'error';
 
-export const STATE_META: Record<DisplayState, { label: string; dot: string; badge: string; pulse?: boolean }> = {
-	working: { label: 'Working', dot: 'bg-primary', badge: 'badge-primary', pulse: true },
-	waiting: { label: 'Needs you', dot: 'bg-warning', badge: 'badge-warning', pulse: true },
-	idle: { label: 'Idle', dot: 'bg-success', badge: 'badge-success' },
-	shell: { label: 'Shell', dot: 'bg-muted-foreground', badge: '' },
-	starting: { label: 'Starting', dot: 'bg-primary/60', badge: 'badge-primary', pulse: true },
-	stopped: { label: 'Stopped', dot: 'bg-muted-foreground/40', badge: '' },
-	error: { label: 'Error', dot: 'bg-danger', badge: 'badge-danger' }
+/**
+ * Each state's look, used everywhere a session shows: its dot, badge, and the glow around its
+ * card, terminal and sidebar row. Blue while the agent works, green when it's idle, yellow
+ * when it needs you, red on an error, gray when it's stopped. Keep them in one place so a
+ * session never shows two colours at once.
+ */
+export const STATE_META: Record<DisplayState, { label: string; dot: string; badge: string; glow: string; pulse?: boolean }> = {
+	working: { label: 'Working', dot: 'bg-primary', badge: 'badge-primary', glow: 'glow-blue glow-breathe', pulse: true },
+	waiting: { label: 'Needs you', dot: 'bg-warning', badge: 'badge-warning', glow: 'glow-yellow glow-pulse', pulse: true },
+	idle: { label: 'Idle', dot: 'bg-success', badge: 'badge-success', glow: 'glow-green' },
+	shell: { label: 'Shell', dot: 'bg-muted-foreground', badge: '', glow: 'glow-gray' },
+	starting: { label: 'Starting', dot: 'bg-primary/60', badge: 'badge-primary', glow: 'glow-blue glow-breathe', pulse: true },
+	stopped: { label: 'Stopped', dot: 'bg-muted-foreground/40', badge: '', glow: 'glow-gray' },
+	error: { label: 'Error', dot: 'bg-danger', badge: 'badge-danger', glow: 'glow-red' }
 };
 
 /**
- * The glow around a session (its card, and inset its terminal): green while it runs, breathing
- * while the agent works; yellow pulsing when it needs you; red on an error; gray when it's
- * stopped, or `connected` is false (its terminal lost the container).
+ * The glow around a session (its card, and inset its terminal), in its state's colour; gray
+ * when `connected` is false (its terminal lost the container).
  */
 export function glowClass(state: DisplayState, opts: { inset?: boolean; small?: boolean; connected?: boolean } = {}): string {
 	const base = opts.small ? 'glow-sm' : opts.inset ? 'glow-inset' : 'glow';
-	if (opts.connected === false) return `${base} glow-gray`;
-	switch (state) {
-		case 'working':
-		case 'starting':
-			return `${base} glow-green glow-breathe`;
-		case 'idle':
-			return `${base} glow-green`;
-		case 'waiting':
-			return `${base} glow-yellow glow-pulse`;
-		case 'error':
-			return `${base} glow-red`;
-		default:
-			return `${base} glow-gray`;
-	}
+	return `${base} ${opts.connected === false ? 'glow-gray' : STATE_META[state].glow}`;
 }
 
 /** One state for dots and badges, from the stored status and what the terminal shows. */
