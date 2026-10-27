@@ -17,6 +17,7 @@
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
@@ -239,11 +240,17 @@
 						</div>
 					</div>
 				{:else}
-					<div class="card px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
-						{#if data.linear.connected}
-							No rules yet. Add one, then label an issue in Linear.
+					<div class="card">
+						{#if !data.linear.connected}
+							<EmptyState title="Connect Linear to add rules" body="A rule starts a session when an issue gets a label: Claude works on it, comments on the issue and opens the pull request." />
+						{:else if !data.accounts.length}
+							<EmptyState title="Add a model account first" body="Rules start sessions as one of your model accounts.">
+								{#snippet action()}<a class="btn btn-primary btn-sm" href="/accounts?add=model">Add a model account</a>{/snippet}
+							</EmptyState>
 						{:else}
-							Connect Linear to add rules.
+							<EmptyState title="No rules yet" body="Add one, then label an issue in Linear: a session starts on it within a minute.">
+								{#snippet action()}<button class="btn btn-primary btn-sm" onclick={() => openRule('new')}><Plus />Add a rule</button>{/snippet}
+							</EmptyState>
 						{/if}
 					</div>
 				{/each}

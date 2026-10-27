@@ -15,17 +15,22 @@
 		PanelLeftClose,
 		PanelLeftOpen,
 		Menu,
+		Pin,
+		PinOff,
 		Workflow,
 		X
 	} from '@lucide/svelte';
+	import type { Session } from '#lib/types.ts';
 	import Logo from '#lib/components/Logo.svelte';
+	import Shortcuts from '#lib/components/Shortcuts.svelte';
 	import Toaster from '#lib/components/Toaster.svelte';
 	import ConfirmHost from '#lib/components/ConfirmHost.svelte';
 	import CommandPalette from '#lib/components/CommandPalette.svelte';
 	import StateDot from '#lib/components/StateDot.svelte';
 	import { api } from '#lib/client/api.ts';
 	import { connectLive, session, sessions, setTheme, theme } from '#lib/client/state.svelte.ts';
-	import { displayState, sortForOverview } from '#lib/session-state.ts';
+	import { displayState, sortForOverview, STATE_META, type DisplayState } from '#lib/session-state.ts';
+	import { ago } from '#lib/client/format.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
@@ -66,7 +71,42 @@
 		{ href: '/settings', label: 'Settings', icon: Settings }
 	];
 
-	const ordered = $derived(sortForOverview(sessions.list, sessions.live));
+	// Pinned sessions stay on top of the sidebar, in this browser.
+	let pinned = $state<string[]>([]);
+	$effect(() => {
+		try {
+			pinned = JSON.parse(localStorage.getItem('ccm.pinned') ?? '[]');
+		} catch {}
+	});
+	function togglePin(id: string) {
+		pinned = pinned.includes(id) ? pinned.filter((p) => p !== id) : [...pinned, id];
+		try {
+			localStorage.setItem('ccm.pinned', JSON.stringify(pinned));
+		} catch {}
+	}
+	const ordered = $derived.by(() => {
+		const all = sortForOverview(sessions.list, sessions.live);
+		return [...all.filter((s) => pinned.includes(s.id)), ...all.filter((s) => !pinned.includes(s.id))];
+	});
+
+	/** The sidebar's second line: what the session is doing. */
+	function doing(s: Session, view: DisplayState): { text: string; tone: string } {
+		const sum = sessions.live[s.id]?.summary;
+		switch (view) {
+			case 'waiting':
+				return { text: 'Needs you', tone: 'text-warning' };
+			case 'working':
+				return { text: sum?.todos.find((t) => t.status === 'in_progress')?.content ?? sum?.lastTool ?? 'Working', tone: 'text-primary/90' };
+			case 'error':
+				return { text: 'Failed to start', tone: 'text-danger' };
+			case 'starting':
+				return { text: 'Starting…', tone: '' };
+			case 'stopped':
+				return { text: `Stopped${s.stoppedAt ? ` · ${ago(s.stoppedAt)}` : ''}`, tone: '' };
+			default:
+				return { text: sum?.title && sum.title !== s.name ? sum.title : STATE_META[view].label, tone: '' };
+		}
+	}
 
 	async function logout() {
 		const r = await api.post<{ redirect: string | null }>('/api/auth/logout');
@@ -136,19 +176,37 @@
 		{#each ordered as s (s.id)}
 			{@const active = page.url.pathname === `/s/${s.id}`}
 			{@const view = displayState(s, sessions.live[s.id])}
-			<a
-				href="/s/{s.id}"
-				title="{s.name} — {s.repoFullName ?? s.repoUrl}"
-				class="flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[0.8125rem] transition-colors {active
-					? 'bg-accent text-foreground'
-					: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'} {compact ? 'justify-center' : ''}"
-			>
-				<StateDot state={view} />
+			{@const now = doing(s, view)}
+			{@const isPinned = pinned.includes(s.id)}
+			<div class="group relative">
+				<a
+					href="/s/{s.id}"
+					title="{s.name} — {s.repoFullName ?? s.repoUrl}"
+					class="flex items-center gap-2.5 rounded-lg px-2.5 transition-colors {compact ? 'h-8 justify-center' : 'py-1.5 pr-8'} {active
+						? 'bg-accent text-foreground'
+						: 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'}"
+				>
+					<StateDot state={view} class={compact ? '' : 'mt-0.5 self-start'} />
+					{#if !compact}
+						<span class="min-w-0 flex-1">
+							<span class="block truncate text-[0.8125rem] {active ? 'font-medium' : ''} {s.status === 'stopped' ? 'opacity-70' : ''}">{s.name}</span>
+							<span class="block truncate text-[0.6875rem] {now.tone || 'text-muted-foreground/80'}">{now.text}</span>
+						</span>
+					{/if}
+				</a>
 				{#if !compact}
-					<span class="min-w-0 flex-1 truncate {s.status === 'stopped' ? 'opacity-70' : ''}">{s.name}</span>
-					{#if view === 'waiting'}<span class="rounded-full bg-warning/15 px-1.5 text-[0.625rem] font-semibold text-warning">you</span>{/if}
+					<button
+						type="button"
+						class="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground {isPinned ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}"
+						title={isPinned ? 'Unpin' : 'Pin to the top'}
+						aria-label={isPinned ? `Unpin ${s.name}` : `Pin ${s.name}`}
+						aria-pressed={isPinned}
+						onclick={() => togglePin(s.id)}
+					>
+						{#if isPinned}<PinOff class="size-3.5" />{:else}<Pin class="size-3.5" />{/if}
+					</button>
 				{/if}
-			</a>
+			</div>
 		{:else}
 			{#if !compact}
 				<a href="/new" class="block w-full rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground hover:border-primary/50 hover:text-foreground">
@@ -213,6 +271,7 @@
 	</div>
 	<!-- ⌘K / Ctrl+K: jump to a session or page. -->
 	<CommandPalette />
+	<Shortcuts sessions={ordered} />
 {/if}
 
 <Toaster />

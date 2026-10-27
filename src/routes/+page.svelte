@@ -20,7 +20,9 @@
 
 	const description = $derived.by(() => {
 		if (!sessions.list.length) return 'Claude Code sessions on your own hardware, one container each.';
-		const parts = [`${active.length} running`];
+		const failed = count('error');
+		const parts = [`${active.length - failed} running`];
+		if (failed) parts.push(`${failed} failed`);
 		if (count('waiting')) parts.push(`${count('waiting')} need${count('waiting') === 1 ? 's' : ''} you`);
 		if (count('working')) parts.push(`${count('working')} working`);
 		if (stopped.length) parts.push(`${stopped.length} stopped`);

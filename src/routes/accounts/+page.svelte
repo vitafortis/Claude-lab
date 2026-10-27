@@ -21,10 +21,12 @@
 		Plus,
 		Send,
 		RefreshCw,
-		Trash2
+		Trash2,
+		KeyRound
 	} from '@lucide/svelte';
 	import Dialog from '#lib/components/Dialog.svelte';
 	import GettingStarted from '#lib/components/GettingStarted.svelte';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
 	import { modelLabel } from '#lib/models.ts';
 	import PageHeader from '#lib/components/PageHeader.svelte';
@@ -517,9 +519,9 @@
 						</div>
 					</div>
 				{:else}
-					<button class="w-full px-4 py-8 text-center text-[0.8125rem] text-muted-foreground hover:text-foreground" onclick={openAdd}>
-						No model accounts yet. <span class="text-primary">Add one →</span>
-					</button>
+					<EmptyState icon={KeyRound} title="No model accounts yet" body="Sessions run as one of these: your Claude plan or API key, Claude on your cloud, OpenAI or Gemini.">
+						{#snippet action()}<button class="btn btn-primary btn-sm" onclick={openAdd}><Plus />Add a model account</button>{/snippet}
+					</EmptyState>
 				{/each}
 			</div>
 		</section>
@@ -560,9 +562,9 @@
 							</div>
 						</div>
 					{:else}
-						<p class="flex items-center justify-center gap-2 px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">
-							<Layers class="size-4" />No profiles. Every session uses the account you pick for it.
-						</p>
+						<EmptyState icon={Layers} title="No profiles" body="Every session uses the account you pick for it. A profile picks one by repo: work repos on Bedrock, side projects on Codex.">
+							{#snippet action()}<button class="btn btn-secondary btn-sm" onclick={() => openProfile()}><Plus />Add a profile</button>{/snippet}
+						</EmptyState>
 					{/each}
 					{#if data.profiles.length}
 						<div class="flex flex-wrap items-center gap-2 bg-surface px-4 py-2.5 text-xs">
@@ -608,7 +610,9 @@
 						</div>
 					</div>
 				{:else}
-					<p class="px-4 py-8 text-center text-[0.8125rem] text-muted-foreground">No GitHub accounts. Public repos still work without one.</p>
+					<EmptyState title="No GitHub accounts" body="Public repos work without one. Add a token for private repos, pushing and pull requests.">
+						{#snippet action()}<button class="btn btn-secondary btn-sm" onclick={() => openToken(null)}><Plus />Add a token</button>{/snippet}
+					</EmptyState>
 				{/each}
 			</div>
 		</section>

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { untrack } from 'svelte';
-	import { CircleAlert, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, Wand } from '@lucide/svelte';
+	import { onMount, tick, untrack } from 'svelte';
+	import { ChevronDown, CircleAlert, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, SlidersHorizontal, Wand } from '@lucide/svelte';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
-	import { modelGroups } from '#lib/models.ts';
+	import { modelGroups, modelLabel } from '#lib/models.ts';
 	import RepoPicker from '#lib/components/RepoPicker.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
@@ -147,6 +147,69 @@
 		newBranch = `claude/${slugify(prompt.split('\n')[0] || name || 'work', 32)}`;
 	}
 
+	// Account, profile, model, permissions and Remote Control fold into one line; it opens by
+	// itself when something there needs a look.
+	let showOptions = $state(false);
+	const mustShowOptions = $derived(
+		!data.accounts.length || (!!account && ACCOUNT_KINDS[account.kind].signIn === true && account.status === 'signed_out') || (mode === 'skill' && agent !== 'claude')
+	);
+	const optionsOpen = $derived(showOptions || mustShowOptions);
+	const optionsSummary = $derived(
+		[
+			account ? `${account.name} · ${AGENT_LABEL[account.agent]}` : 'No account',
+			profile ? `profile ${profile.name}` : null,
+			model ? modelLabel(model) : 'default model',
+			`${PERMISSION_MODES.find((m) => m.value === permissionMode)?.label ?? permissionMode} permissions`,
+			rcAvailable && remoteControl ? 'Remote Control' : null
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
+
+	// The last choices, in this browser: a new session starts from them, and from what the
+	// picked repo used last time (a matching profile still wins).
+	type Choices = { github: string; account: string; model: string; permissionMode: PermissionMode; remoteControl: boolean };
+	const MEMORY = 'ccm.newSession';
+	function recall(): { last?: Choices; repos?: Record<string, Choices> } {
+		try {
+			return JSON.parse(localStorage.getItem(MEMORY) ?? '{}');
+		} catch {
+			return {};
+		}
+	}
+	async function applyChoices(c: Choices) {
+		if (c.github === '' || data.githubAccounts.some((a) => a.id === c.github)) githubAccountId = c.github;
+		const acct = data.accounts.find((a) => a.id === c.account);
+		if (!acct) return;
+		accountId = acct.id;
+		// After the account's agent has settled, so its model and permissions stick.
+		await tick();
+		model = c.model;
+		permissionMode = fitPermissionMode(acct.agent, c.permissionMode);
+		remoteControl = c.remoteControl;
+	}
+	function remember(fullName: string | null) {
+		const c: Choices = { github: githubAccountId, account: accountId, model, permissionMode, remoteControl };
+		const m = recall();
+		const repos = { ...(m.repos ?? {}), ...(fullName ? { [fullName]: c } : {}) };
+		const keep = Object.fromEntries(Object.entries(repos).slice(-50));
+		try {
+			localStorage.setItem(MEMORY, JSON.stringify({ last: c, repos: keep }));
+		} catch {}
+	}
+	onMount(() => {
+		const last = recall().last;
+		if (last) void applyChoices(last);
+	});
+	let recalledFor: string | null = null;
+	$effect(() => {
+		const full = parsed?.fullName ?? null;
+		if (!full || full === recalledFor || profile) return;
+		recalledFor = full;
+		const c = untrack(() => recall().repos?.[full]);
+		if (c) void applyChoices(c);
+	});
+
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		busy = true;
@@ -168,6 +231,7 @@
 				permissionMode,
 				remoteControl: rcAvailable && remoteControl
 			});
+			remember(parsed?.fullName ?? null);
 			upsertSession(s);
 			goto(`/s/${s.id}`);
 		} catch (err) {
@@ -268,51 +332,10 @@
 
 		<section class="card space-y-3 p-4">
 			<h2 class="text-[0.9375rem] font-semibold tracking-tight">Session</h2>
-			<div class="grid gap-3 sm:grid-cols-2">
-				<div>
-					<label class="label" for="name">Name</label>
-					<input id="name" class="input" placeholder="Named after the repo" bind:value={name} oninput={() => (nameTouched = true)} />
-				</div>
-				<div>
-					<label class="label flex items-center justify-between" for="acct"><span>Account</span>{#if account}<AgentBadge agent={account.agent} />{/if}</label>
-					<select id="acct" class="input" bind:value={accountId} required>
-						{#each AGENTS as ag (ag)}
-							{@const list = data.accounts.filter((a) => a.agent === ag)}
-							{#if list.length}
-								<optgroup label={AGENT_LABEL[ag]}>
-									{#each list as a (a.id)}
-										<option value={a.id}>{a.name} · {ACCOUNT_KINDS[a.kind].label}{a.status === 'signed_out' ? (ACCOUNT_KINDS[a.kind].signIn ? ' (not signed in)' : ' (not working)') : ''}</option>
-									{/each}
-								</optgroup>
-							{/if}
-						{/each}
-					</select>
-					{#if account && ACCOUNT_KINDS[account.kind].signIn && account.status === 'signed_out'}
-						<p class="mt-1.5 flex items-start gap-1.5 text-xs text-warning">
-							<CircleAlert class="mt-px size-3.5 shrink-0" /><span>Not signed in yet. <a class="underline" href="/accounts">Sign in</a>{#if agent === 'claude'}, or run <code class="font-mono">/login</code> in the session's terminal{/if}.</span>
-						</p>
-					{/if}
-				</div>
+			<div>
+				<label class="label" for="name">Name</label>
+				<input id="name" class="input" placeholder="Named after the repo" bind:value={name} oninput={() => (nameTouched = true)} />
 			</div>
-			{#if data.profiles.length}
-				<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem]">
-					<Layers class="size-4 shrink-0 text-primary" />
-					<label for="profile" class="font-medium">Profile</label>
-					<select id="profile" class="input h-8 w-auto min-w-48 text-xs" bind:value={profileChoice}>
-						<option value="auto">Match the repo{matched ? `: ${matched.name}` : ''}</option>
-						{#each data.profiles as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
-						<option value="none">None</option>
-					</select>
-					<span class="text-xs text-muted-foreground">
-						{#if profile}Fills in the account, model and permissions below.{:else if profileChoice === 'auto'}{parsed ? 'No profile matches this repo.' : 'Pick a repo to match.'}{/if}
-					</span>
-				</div>
-			{/if}
-			{#if mode === 'skill' && agent !== 'claude'}
-				<p class="flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
-					<CircleAlert class="mt-px size-3.5 shrink-0" /><span>Skills run in Claude Code. Pick a Claude account for this session.</span>
-				</p>
-			{/if}
 			{#if mode === 'skill'}
 				<div>
 					<span class="label">Skill</span>
@@ -350,40 +373,90 @@
 					<textarea id="prompt" class="input h-auto min-h-20 py-2 leading-relaxed" rows="3" placeholder="What should {agentName} work on? Leave empty to start at the prompt." bind:value={prompt}></textarea>
 				</div>
 			{/if}
-			<div class="grid gap-3 sm:grid-cols-[16rem_1fr]">
-				<div>
-					<label class="label" for="model">Model</label>
-					<ModelPicker id="model" bind:value={model} {agent} kind={account?.kind} />
-				</div>
-				<div>
-					<span class="label">Permissions</span>
-					<div class="flex flex-wrap gap-1.5">
-						{#each permissionModes as m (m.value)}
-							<button
-								type="button"
-								class="btn btn-sm {permissionMode === m.value ? 'btn-primary' : 'btn-secondary'}"
-								title={m.hint}
-								onclick={() => (permissionMode = m.value)}>{m.label}</button
-							>
-						{/each}
-					</div>
-					<p class="mt-1.5 text-xs text-muted-foreground">{PERMISSION_MODES.find((m) => m.value === permissionMode)?.hint}</p>
-				</div>
-			</div>
-			<div class="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
-				<Radio class="mt-0.5 size-4 shrink-0 text-primary" />
-				<div class="min-w-0 flex-1 text-[0.8125rem]">
-					<p class="font-medium">Remote Control</p>
-					<p class="text-xs text-muted-foreground">
-						{#if rcAvailable}
-							Also continue this session from claude.ai/code and the Claude app, under the session's name.
-						{:else}
-							{agent === 'claude' ? "Needs a Claude subscription login. Tokens, API keys and cloud providers can't use Remote Control." : 'Remote Control is a Claude Code feature.'}
+			{#if mode === 'skill' && agent !== 'claude'}
+				<p class="flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
+					<CircleAlert class="mt-px size-3.5 shrink-0" /><span>Skills run in Claude Code. Pick a Claude account for this session.</span>
+				</p>
+			{/if}
+			<!-- Account, profile, model, permissions and Remote Control: one line until changed. -->
+			<button type="button" class="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left text-[0.8125rem] transition-colors hover:bg-accent/40" aria-expanded={optionsOpen} onclick={() => (showOptions = !showOptions)}>
+				<SlidersHorizontal class="size-4 shrink-0 text-muted-foreground" />
+				<span class="min-w-0 flex-1 truncate">{optionsSummary}</span>
+				<span class="text-xs text-muted-foreground">{optionsOpen ? 'Hide' : 'Change'}</span>
+				<ChevronDown class="size-4 shrink-0 text-muted-foreground transition-transform {optionsOpen ? 'rotate-180' : ''}" />
+			</button>
+			{#if optionsOpen}
+				<div class="space-y-3 rounded-lg border border-border p-3">
+					<div>
+						<label class="label flex items-center justify-between" for="acct"><span>Account</span>{#if account}<AgentBadge agent={account.agent} />{/if}</label>
+						<select id="acct" class="input" bind:value={accountId} required>
+							{#each AGENTS as ag (ag)}
+								{@const list = data.accounts.filter((a) => a.agent === ag)}
+								{#if list.length}
+									<optgroup label={AGENT_LABEL[ag]}>
+										{#each list as a (a.id)}
+											<option value={a.id}>{a.name} · {ACCOUNT_KINDS[a.kind].label}{a.status === 'signed_out' ? (ACCOUNT_KINDS[a.kind].signIn ? ' (not signed in)' : ' (not working)') : ''}</option>
+										{/each}
+									</optgroup>
+								{/if}
+							{/each}
+						</select>
+						{#if account && ACCOUNT_KINDS[account.kind].signIn && account.status === 'signed_out'}
+							<p class="mt-1.5 flex items-start gap-1.5 text-xs text-warning">
+								<CircleAlert class="mt-px size-3.5 shrink-0" /><span>Not signed in yet. <a class="underline" href="/accounts">Sign in</a>{#if agent === 'claude'}, or run <code class="font-mono">/login</code> in the session's terminal{/if}.</span>
+							</p>
 						{/if}
-					</p>
+					</div>
+				{#if data.profiles.length}
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-[0.8125rem]">
+						<Layers class="size-4 shrink-0 text-primary" />
+						<label for="profile" class="font-medium">Profile</label>
+						<select id="profile" class="input h-8 w-auto min-w-48 text-xs" bind:value={profileChoice}>
+							<option value="auto">Match the repo{matched ? `: ${matched.name}` : ''}</option>
+							{#each data.profiles as p (p.id)}<option value={p.id}>{p.name}</option>{/each}
+							<option value="none">None</option>
+						</select>
+						<span class="text-xs text-muted-foreground">
+							{#if profile}Fills in the account, model and permissions below.{:else if profileChoice === 'auto'}{parsed ? 'No profile matches this repo.' : 'Pick a repo to match.'}{/if}
+						</span>
+					</div>
+				{/if}
+				<div class="grid gap-3 sm:grid-cols-[16rem_1fr]">
+					<div>
+						<label class="label" for="model">Model</label>
+						<ModelPicker id="model" bind:value={model} {agent} kind={account?.kind} />
+					</div>
+					<div>
+						<span class="label">Permissions</span>
+						<div class="flex flex-wrap gap-1.5">
+							{#each permissionModes as m (m.value)}
+								<button
+									type="button"
+									class="btn btn-sm {permissionMode === m.value ? 'btn-primary' : 'btn-secondary'}"
+									title={m.hint}
+									onclick={() => (permissionMode = m.value)}>{m.label}</button
+								>
+							{/each}
+						</div>
+						<p class="mt-1.5 text-xs text-muted-foreground">{PERMISSION_MODES.find((m) => m.value === permissionMode)?.hint}</p>
+					</div>
 				</div>
-				<Switch checked={rcAvailable && remoteControl} disabled={!rcAvailable} label="Remote Control" onchange={(v) => (remoteControl = v)} />
-			</div>
+				<div class="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5">
+					<Radio class="mt-0.5 size-4 shrink-0 text-primary" />
+					<div class="min-w-0 flex-1 text-[0.8125rem]">
+						<p class="font-medium">Remote Control</p>
+						<p class="text-xs text-muted-foreground">
+							{#if rcAvailable}
+								Also continue this session from claude.ai/code and the Claude app, under the session's name.
+							{:else}
+								{agent === 'claude' ? "Needs a Claude subscription login. Tokens, API keys and cloud providers can't use Remote Control." : 'Remote Control is a Claude Code feature.'}
+							{/if}
+						</p>
+					</div>
+					<Switch checked={rcAvailable && remoteControl} disabled={!rcAvailable} label="Remote Control" onchange={(v) => (remoteControl = v)} />
+				</div>
+				</div>
+			{/if}
 		</section>
 
 		{#if error}<p class="rounded-lg bg-danger/10 px-3 py-2 text-[0.8125rem] text-danger">{error}</p>{/if}

@@ -12,6 +12,12 @@ export const STATE_META: Record<DisplayState, { label: string; dot: string; badg
 	error: { label: 'Error', dot: 'bg-danger', badge: 'badge-danger' }
 };
 
+/** The glow around a session's card (and, inset, its terminal): only states worth a look glow. */
+export function glowClass(state: DisplayState, inset = false): string {
+	if (state === 'working' || state === 'waiting') return `glow-${state}${inset ? '-inset' : ''}`;
+	return state === 'error' && !inset ? 'glow-error' : '';
+}
+
 /** One state for dots and badges, from the stored status and what the terminal shows. */
 export function displayState(s: Session, live: SessionLive | undefined): DisplayState {
 	if (s.status === 'error') return 'error';

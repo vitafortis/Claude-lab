@@ -9,7 +9,7 @@
 	import { ago } from '#lib/client/format.ts';
 	import { sendToSession, startSession, stopSession } from '#lib/client/sessions.ts';
 	import { AGENT_LABEL } from '#lib/providers.ts';
-	import { displayState } from '#lib/session-state.ts';
+	import { displayState, glowClass } from '#lib/session-state.ts';
 	import type { Session, SessionLive } from '#lib/types.ts';
 
 	let { session: s, live }: { session: Session; live?: SessionLive } = $props();
@@ -42,7 +42,7 @@
 	}
 </script>
 
-<article class="card flex min-w-0 flex-col overflow-hidden transition-shadow hover:shadow-surface-lg {view === 'waiting' ? 'ring-1 ring-warning/40' : ''}">
+<article class="card flex min-w-0 flex-col overflow-hidden transition-shadow hover:shadow-surface-lg {glowClass(view)}">
 	<header class="flex items-start gap-3 px-4 pt-4">
 		<StateDot state={view} class="mt-1.5" />
 		<div class="min-w-0 flex-1">

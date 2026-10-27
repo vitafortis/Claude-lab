@@ -17,6 +17,7 @@
 		PanelRightOpen,
 		Play,
 		RotateCcw,
+		ExternalLink,
 		Sparkles,
 		Square,
 		SquareTerminal,
@@ -40,10 +41,11 @@
 	import { deleteSession, relaunchAgent, sendToSession, startSession, stopSession, type Launch } from '#lib/client/sessions.ts';
 	import QuestionBar from '#lib/components/QuestionBar.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
+	import PanelSection from '#lib/components/PanelSection.svelte';
 	import { CLAUDE_ALIASES, modelLabel } from '#lib/models.ts';
 	import { findQuestion, type Question } from '#lib/pane.ts';
 	import { confirmAction, sessions, toast, upsertSession } from '#lib/client/state.svelte.ts';
-	import { displayState } from '#lib/session-state.ts';
+	import { displayState, glowClass } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
 	import { PERMISSION_MODES, type Conversation, type Session, type SessionLive, type SkillOption } from '#lib/types.ts';
@@ -80,6 +82,7 @@
 	let panel = $state(true);
 	let term = $state<Terminal>();
 	let touch = $state(false);
+	let phone = $state(false);
 	// A menu the agent shows (permission prompt, question, picker), read off the terminal.
 	let question = $state<Question | null>(null);
 	$effect(() => {
@@ -130,6 +133,7 @@
 		// Narrow screens start with the panel closed; touch screens get the key bar.
 		if (matchMedia('(max-width: 1023px)').matches) panel = false;
 		touch = matchMedia('(pointer: coarse)').matches;
+		phone = matchMedia('(max-width: 639px)').matches;
 	});
 
 	async function act(fn: () => Promise<unknown>) {
@@ -203,8 +207,13 @@
 		{ label: '⏎', seq: '\r', title: 'Enter' }
 	];
 
+	// On phones the header's model chip and Remote button live in the Session menu.
+	let modelSheet = $state(false);
 	const restartItems = $derived([
 		...(running && isClaude ? [{ label: 'Run a skill…', hint: 'Type a skill or command into Claude', icon: Wand, onclick: openSkill }, 'separator' as const] : []),
+		...(phone && isClaude ? [{ label: 'Change model…', hint: modelLabel(s.model), icon: Sparkles, onclick: () => (modelSheet = true) }] : []),
+		...(phone && s.rcUrl && running ? [{ label: 'Open in claude.ai', hint: 'Remote Control', icon: ExternalLink, onclick: () => window.open(s.rcUrl!, '_blank', 'noopener') }] : []),
+		...(phone && isClaude ? ['separator' as const] : []),
 		{ label: 'Continue newest conversation', hint: `Restart ${agentName} and pick up where it left off`, icon: RotateCcw, onclick: () => launch({ mode: 'continue' }) },
 		{ label: 'New conversation', hint: 'Fresh context, same repo and branch', icon: FilePlus2, onclick: () => launch({ mode: 'new' }) },
 		'separator' as const,
@@ -219,7 +228,8 @@
 	<!-- Header -->
 	<header class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface px-3 py-2 sm:px-4">
 		<StateDot state={view} />
-		<div class="min-w-0 flex-1">
+		<!-- On phones the title gets its own row; the controls wrap below it. -->
+		<div class="min-w-0 flex-1 max-sm:basis-[calc(100%-1.25rem)]">
 			<h1 class="truncate text-[0.9375rem] leading-tight font-semibold tracking-tight">{s.name}</h1>
 			<p class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 				<span class="truncate">{s.repoFullName ?? s.repoUrl}</span>
@@ -239,7 +249,7 @@
 		{/if}
 		{#if isClaude}
 			<!-- Quick model switch: a native select, so phones get their own picker. -->
-			<label class="relative flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground" title="Model: {modelLabel(s.model)}. Change it here">
+			<label class="relative flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground max-sm:hidden" title="Model: {modelLabel(s.model)}. Change it here">
 				<Sparkles class="size-3.5" /><span class="max-w-28 truncate">{s.model ? modelLabel(s.model).replace(' (pinned)', '') : 'Default model'}</span><ChevronDown class="size-3" />
 				<select class="absolute inset-0 cursor-pointer opacity-0" aria-label="Model" value={s.model ?? ''} onchange={(e) => changeModel(e.currentTarget.value)}>
 					<option value="">Default model</option>
@@ -258,7 +268,7 @@
 			</span>
 		{/if}
 		{#if s.rcUrl && running}
-			<a class="btn btn-secondary btn-sm" href={s.rcUrl} target="_blank" rel="noopener" title="Open this session in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
+			<a class="btn btn-secondary btn-sm max-sm:hidden" href={s.rcUrl} target="_blank" rel="noopener" title="Open this session in claude.ai (Remote Control)"><BrandIcon brand="claude" class="size-3.5" />Remote</a>
 		{/if}
 		<Menu items={restartItems}>
 			{#snippet trigger({ toggle })}
@@ -279,10 +289,12 @@
 				<!-- The agent's screen only: the Shell tab is a separate terminal the probe doesn't read. -->
 				{#if mode === 'claude'}<LinkBar links={live?.links ?? []} />{/if}
 				{#if question}<QuestionBar {question} {agentName} onanswer={(n) => answer(String(n))} oncancel={() => answer('Escape')} />{/if}
-				<div class="min-h-0 flex-1">
+				<div class="relative min-h-0 flex-1">
 					{#key `${s.containerId}:${mode}`}
 						<Terminal bind:this={term} path="/ws/sessions/{s.id}/terminal?mode={mode}" autofocus onstate={(v) => (conn = v)} onscreen={(lines) => (question = mode === 'claude' ? findQuestion(lines) : null)} />
 					{/key}
+					<!-- The agent's state as a glow around its terminal, over it but never in the way. -->
+					{#if mode === 'claude'}<div class="pointer-events-none absolute inset-0 z-10 {glowClass(view, true)}"></div>{/if}
 				</div>
 				{#if touch}
 					<!-- Keys a touch keyboard lacks. Pressing one keeps the terminal focused, so the keyboard stays up. -->
@@ -328,13 +340,13 @@
 		{#if panel}
 			<aside class="w-80 shrink-0 overflow-y-auto border-l border-border bg-surface max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-20 max-lg:shadow-surface-lg">
 				{#if isClaude}
-				<section class="space-y-2 border-b border-border p-4">
-					<div class="flex items-center justify-between">
-						<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">Summary</h2>
+				<PanelSection id="summary" title="Summary">
+					{#snippet action()}
 						<button class="btn btn-ghost btn-sm -mr-2" disabled={!running || summarizing || !sum} title="Ask a small model for a summary (uses the session's Claude account)" onclick={summarize}>
 							{#if summarizing}<LoaderCircle class="animate-spin" />{:else}<Sparkles />{/if}Summarize
 						</button>
-					</div>
+					{/snippet}
+					<div class="space-y-2">
 					{#if live?.aiSummary}
 						<p class="text-[0.8125rem] leading-relaxed">{live.aiSummary.text}</p>
 						<p class="text-[0.6875rem] text-muted-foreground">{ago(live.aiSummary.at)}</p>
@@ -348,7 +360,8 @@
 					{:else}
 						<p class="text-xs text-muted-foreground">Nothing yet. Once you talk to Claude, the latest exchange shows here.</p>
 					{/if}
-				</section>
+					</div>
+				</PanelSection>
 				{:else}
 				<section class="space-y-1.5 border-b border-border p-4">
 					<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">{AGENT_LABEL[s.agent]}</h2>
@@ -360,8 +373,7 @@
 				{/if}
 
 				{#if sum?.todos.length}
-					<section class="border-b border-border p-4">
-						<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><ListTodo class="size-3.5" />Tasks</h2>
+					<PanelSection id="tasks" title="Tasks" icon={ListTodo}>
 						<ul class="space-y-1.5">
 							{#each sum.todos as t, i (i)}
 								<li class="flex items-start gap-2 text-xs">
@@ -372,30 +384,30 @@
 								</li>
 							{/each}
 						</ul>
-					</section>
+					</PanelSection>
 				{/if}
 
 				{#if git}
-					<section class="border-b border-border p-4 text-xs">
-						<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><GitBranch class="size-3.5" />Git</h2>
+					<PanelSection id="git" title="Git" icon={GitBranch}>
+						<div class="text-xs">
 						<p class="font-mono">{git.branch ?? 'detached HEAD'}</p>
 						<p class="mt-1 text-muted-foreground">
 							{git.changed} changed file{git.changed === 1 ? '' : 's'} ·
 							<span class="text-success">+{git.insertions}</span> <span class="text-danger">−{git.deletions}</span>
 							{#if git.ahead} · {git.ahead} unpushed{/if}{#if git.behind} · {git.behind} behind{/if}
 						</p>
-					</section>
+						</div>
+					</PanelSection>
 				{/if}
 
 				{#if isClaude}
-					<section class="border-b border-border p-4">
-						<h2 class="mb-2 flex items-center gap-1.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase"><History class="size-3.5" />Conversations</h2>
+					<PanelSection id="conversations" title="Conversations" icon={History}>
 						<Conversations sessionId={s.id} sessionName={s.name} current={sum?.conversationId} updated={sum?.updatedAt} onresume={resume} />
-					</section>
+					</PanelSection>
 				{/if}
 
-				<section class="space-y-3 p-4 text-[0.8125rem]">
-					<h2 class="text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/80 uppercase">Session</h2>
+				<PanelSection id="settings" title="Session">
+					<div class="space-y-3 text-[0.8125rem]">
 					<div>
 						<label class="label" for="acct">{AGENT_LABEL[s.agent]} account</label>
 						<select id="acct" class="input h-8 text-xs" value={s.accountId} onchange={(e) => patch({ accountId: e.currentTarget.value })}>
@@ -441,11 +453,26 @@
 							<Copy class="size-3" />{sessionWorkdir(s)}
 						</button>
 					</div>
-				</section>
+					</div>
+				</PanelSection>
 			</aside>
 		{/if}
 	</div>
 </div>
+
+<Dialog bind:open={modelSheet} title="Model" description="{agentName} restarts on the newest conversation with it." width="max-w-sm">
+	<div class="space-y-1.5">
+		{#each [{ value: '', label: 'Default model', hint: "Claude Code's choice" }, ...CLAUDE_ALIASES] as m (m.value)}
+			<button
+				type="button"
+				class="flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left text-[0.8125rem] {(s.model ?? '') === m.value ? 'border-primary/60 bg-primary-soft' : 'border-border hover:bg-accent/40'}"
+				onclick={() => ((modelSheet = false), changeModel(m.value))}
+			>
+				<span class="flex-1 font-medium">{m.label}</span><span class="text-xs text-muted-foreground">{m.hint}</span>
+			</button>
+		{/each}
+	</div>
+</Dialog>
 
 <Dialog bind:open={skillOpen} title="Run a skill" description="Types the command into Claude's prompt in this session." width="max-w-lg">
 	<form id="run-skill" class="space-y-3" onsubmit={runSkill}>
