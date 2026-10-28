@@ -118,7 +118,7 @@ export interface LinearRef {
 export interface Session {
 	id: string;
 	name: string;
-	/** Docker container name: claude-<repo>, with -2, -3… for more sessions on one repo. */
+	/** Docker container name: orbital-<repo>, with -2, -3… for more sessions on one repo. */
 	containerName: string;
 	kind: SessionKind;
 	/** The skill or command it was started with, e.g. "/code-review 234". */

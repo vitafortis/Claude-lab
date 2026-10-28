@@ -623,6 +623,10 @@ export function setSessionPr(id: string, pr: SessionPr | null) {
 }
 
 /** Fields that can change after creation; they apply from the next launch. */
+export function setSessionContainerName(id: string, name: string) {
+	db().prepare('UPDATE sessions SET container_name = ? WHERE id = ?').run(name, id);
+}
+
 export function updateSession(
 	id: string,
 	patch: Partial<Pick<Session, 'name' | 'model' | 'permissionMode' | 'remoteControl' | 'accountId' | 'githubAccountId'>>

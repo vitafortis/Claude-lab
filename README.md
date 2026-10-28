@@ -18,7 +18,7 @@
 
 ## Features
 
-- **One container per session**: Orbital clones the repo (optionally onto a new branch) into a fresh container named `claude-<repo>` (`claude-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. For a new project, start without a repo: the session gets an empty folder with git ready, and the agent can put it on GitHub with `gh repo create`. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
+- **One container per session**: Orbital clones the repo (optionally onto a new branch) into a fresh container named `orbital-<repo>` (`orbital-<repo>-2`, `-3`… for more sessions on the same repo) and starts Claude Code there, with the name you gave it. For a new project, start without a repo: the session gets an empty folder with git ready, and the agent can put it on GitHub with `gh repo create`. All sessions share one image; repos, home folders and conversations live in a volume, so containers are disposable and nothing is rebuilt per project.
 - **Terminals in the browser**: open any session as a full terminal (xterm.js over a WebSocket). Claude runs inside tmux, so closing the tab doesn't stop it, and several browsers can watch the same session. A **Shell** tab opens a second terminal in the same container. You type straight into the terminal, and scroll it with the wheel or a finger; on phones, a key bar adds Esc, Tab, ⇧Tab, arrows, Ctrl+C, End and Enter. When the agent asks something (a permission prompt, a question with options), the options show above the terminal as buttons. Links on screen, even long sign-in links that wrap over many lines, show above the terminal with Open and Copy buttons.
 - **Live overview**: every session shows whether Claude is *working*, *needs you* (a permission prompt or question), is *idle*, or has exited, plus the last prompt and reply, the task list, the tool it's running, git changes and the last lines of its screen. Sessions that need you sort to the top and get a quick-reply box. **Summarize** asks a small model for a three-sentence summary, using the session's own Claude account.
 - **Stop, resume, relaunch**: stopping removes the container and keeps everything else. Starting again picks up the newest conversation (`claude --continue`); you can also resume any earlier conversation or start a fresh one, and restart Claude inside a running session.
@@ -214,7 +214,7 @@ Issues that already had the label when you added the rule are skipped unless you
 - **Stop** removes the container; the repo, uncommitted changes and conversations stay. **Start** (or **Resume** in the overview) brings the session back with the current image and settings.
 - **Git identity**: commits use the GitHub account's name and noreply address, or `Claude <noreply@anthropic.com>` for sessions without a GitHub account.
 - **Conversations** in the session panel lists every saved conversation; **Resume** restarts Claude on that one.
-- **Attach from the host**: the session panel shows the container name and a copyable `docker exec -it -u node claude-<repo> tmux attach -t main`, for when you're on the server over SSH.
+- **Attach from the host**: the session panel shows the container name and a copyable `docker exec -it -u node orbital-<repo> tmux attach -t main`, for when you're on the server over SSH.
 - **Delete** stops the session and removes its repo clone, home folder and conversations. Pushed commits stay on GitHub.
 
 ### The session image
@@ -261,7 +261,7 @@ Orbital used to be called cc·modern (and briefly Orbit), with `cc-modern` image
 
 3. **Switch images** to `ghcr.io/vitafortis/orbital` and `…/orbital-session`. If Settings names `ghcr.io/vitafortis/cc-modern-session`, sessions use `orbital-session` (same tag) on their own. A custom session image saved in Settings stays as it is; rebuild it `FROM ghcr.io/vitafortis/orbital-session` so it has the renamed `orb-*` scripts.
 
-`CCM_*` variables still work, but rename them to `ORB_*`. On start, Orbital takes over `cc-modern.db` (as `orbital.db`) and renames each session's `.ccm` folder to `.orb`; stored tokens stay readable, and the browser keeps its theme, pins and panel layout. Everyone is signed out once, since the cookie was renamed too.
+Session containers named `claude-<repo>` become `orbital-<repo>` the next time each session starts. `CCM_*` variables still work, but rename them to `ORB_*`. On start, Orbital takes over `cc-modern.db` (as `orbital.db`) and renames each session's `.ccm` folder to `.orb`; stored tokens stay readable, and the browser keeps its theme, pins and panel layout. Everyone is signed out once, since the cookie was renamed too.
 
 ## Development
 

@@ -28,6 +28,7 @@ import {
 	getSession,
 	getSettings,
 	listSessions,
+	setSessionContainerName,
 	setSessionState
 } from '../store.ts';
 import { agentArgs, sessionWorkdir, slugify, type LaunchMode } from '#lib/launch.ts';
@@ -47,7 +48,7 @@ export const LABELS = {
 export const workdir = sessionWorkdir;
 
 /**
- * Removes a container by name only if it's one of ours: names like claude-<repo> could
+ * Removes a container by name only if it's one of ours: names like orbital-<repo> could
  * belong to something else on the host.
  */
 export async function removeOwned(name: string) {
@@ -55,9 +56,11 @@ export async function removeOwned(name: string) {
 	if (info && info.Config.Labels?.[LABELS.instance] === config.instance) await removeContainer(info.Id);
 }
 
-/** claude-<repo>, or claude-<repo>-2, -3… when that name is taken (by a session or any container). */
+const PREFIX = 'orbital-';
+
+/** orbital-<repo>, or orbital-<repo>-2, -3… when that name is taken (by a session or any container). */
 export async function allocateContainerName(repoDir: string): Promise<string> {
-	const base = `claude-${slugify(repoDir, 48)}`;
+	const base = `${PREFIX}${slugify(repoDir, 48)}`;
 	const taken = containerNamesInUse();
 	for (let n = 1; ; n++) {
 		const name = n === 1 ? base : `${base}-${n}`;
@@ -176,8 +179,13 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 		const agent = agentSetup(s.accountId); // fails early if the account is gone
 		await ensureImage(agent.image);
 		writeLaunch(s, agent, launch ?? defaultLaunch(s));
+		await removeOwned(s.containerName);
+		// Sessions from before the rename (claude-<repo>, ccm-…) take an orbital- name at their next start.
+		if (!s.containerName.startsWith(PREFIX)) {
+			s.containerName = await allocateContainerName(s.repoDir);
+			setSessionContainerName(id, s.containerName);
+		}
 		const name = s.containerName;
-		await removeOwned(name);
 		const mounts = [
 			mountSpec(b, accountRel(s.accountId), agent.mount),
 			mountSpec(b, sessionRel(id), '/session'),
