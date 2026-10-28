@@ -36,6 +36,8 @@
 	import LinkBar from '#lib/components/LinkBar.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
+	import { untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { api, errorMessage } from '#lib/client/api.ts';
 	import { copyText } from '#lib/client/clipboard.ts';
 	import { ago, githubLabel } from '#lib/client/format.ts';
@@ -45,7 +47,7 @@
 	import PanelSection from '#lib/components/PanelSection.svelte';
 	import { CLAUDE_ALIASES, modelLabel } from '#lib/models.ts';
 	import { findQuestion, type Question } from '#lib/pane.ts';
-	import { confirmAction, sessions, toast, upsertSession, useSessions } from '#lib/client/state.svelte.ts';
+	import { confirmAction, deletedHere, sessions, toast, upsertSession, useSessions } from '#lib/client/state.svelte.ts';
 	import { displayState, glowClass } from '#lib/session-state.ts';
 	import { sessionWorkdir } from '#lib/launch.ts';
 	import { ACCOUNT_KINDS, AGENT_LABEL, AGENT_PERMISSION_MODES } from '#lib/providers.ts';
@@ -56,7 +58,18 @@
 
 	let { data }: PageProps = $props();
 
-	const s = $derived(shown.list.find((x) => x.id === data.session.id) ?? data.session);
+	const listed = $derived(shown.list.find((x) => x.id === data.session.id));
+	// Not in the list: deleted, here or in another tab. The copy the page loaded with may still say
+	// running, which would show it green and keep its terminal reconnecting; show it stopped instead.
+	const s = $derived(listed ?? { ...data.session, status: 'stopped' as const, containerId: null });
+	$effect(() => {
+		// Deleting from this tab already toasts and navigates away.
+		if (listed || deletedHere.has(data.session.id)) return;
+		untrack(() => {
+			toast('info', `${data.session.name} was deleted`);
+			void goto('/', { replaceState: true });
+		});
+	});
 	const live = $derived(shown.live[s.id]);
 	const view = $derived(displayState(s, live));
 	const running = $derived(s.status === 'running');
