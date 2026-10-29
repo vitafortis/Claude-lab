@@ -34,6 +34,7 @@ import {
 import { agentArgs, sessionWorkdir, slugify, type LaunchMode } from '#lib/launch.ts';
 import { agentSetup, supportsRemoteControl, type AgentSetup } from '../providers.ts';
 import { accountRel, backing, conversationsDir, ensureDirs, metaDir, mountSpec, sessionRel } from './storage.ts';
+import { AWS_ENV, writeAwsCredentials } from './aws.ts';
 import { GIT_ENV, writeGithubCredentials } from './github.ts';
 import { hasConversations } from './transcripts.ts';
 import type { Session, Settings } from '#lib/types.ts';
@@ -98,6 +99,7 @@ function githubEnv(accountId: string | null): string[] {
 	return [
 		// The token itself is in files kept current while the session runs (see ./github.ts).
 		...GIT_ENV,
+		...AWS_ENV,
 		`GIT_AUTHOR_NAME=${who.name}`,
 		`GIT_AUTHOR_EMAIL=${who.email}`,
 		`GIT_COMMITTER_NAME=${who.name}`,
@@ -176,6 +178,7 @@ export async function startSession(id: string, launch?: LaunchMode): Promise<Ses
 		const b = await backing();
 		ensureDirs(accountRel(s.accountId), `${sessionRel(id)}/home`, `${sessionRel(id)}/repo`, `${sessionRel(id)}/.orb`);
 		writeGithubCredentials(s);
+		await writeAwsCredentials(s);
 		const agent = agentSetup(s.accountId); // fails early if the account is gone
 		await ensureImage(agent.image);
 		writeLaunch(s, agent, launch ?? defaultLaunch(s));
@@ -212,6 +215,7 @@ export async function stopSession(id: string): Promise<Session> {
 	}
 	await removeOwned(s.containerName);
 	writeGithubCredentials(s, { remove: true });
+	await writeAwsCredentials(s, { remove: true });
 	setSessionState(id, { status: 'stopped', containerId: null, error: null, stopped: true });
 	return getSession(id)!;
 }
@@ -236,6 +240,7 @@ export async function relaunchAgent(id: string, launch?: LaunchMode): Promise<Se
 	}
 	writeLaunch(session, agent, launch ?? defaultLaunch(session));
 	writeGithubCredentials(session);
+	await writeAwsCredentials(session);
 	const r = await exec(container, ['tmux', 'respawn-pane', '-k', '-t', 'main', 'orb-launch'], { user: 'node' });
 	if (r.exitCode !== 0) throw new DockerError(r.stderr.trim() || 'Could not restart the agent');
 	return session;
@@ -290,6 +295,7 @@ export async function reconcile() {
 			const logs = code !== 0 ? await containerLogs(info.Id, 20).catch(() => '') : '';
 			await removeContainer(info.Id);
 			writeGithubCredentials(s, { remove: true });
+			await writeAwsCredentials(s, { remove: true });
 			setSessionState(s.id, {
 				status: code === 0 ? 'stopped' : 'error',
 				containerId: null,
@@ -298,6 +304,7 @@ export async function reconcile() {
 			});
 		} else if (s.status === 'running' || s.status === 'starting') {
 			writeGithubCredentials(s, { remove: true });
+			await writeAwsCredentials(s, { remove: true });
 			setSessionState(s.id, { status: 'stopped', containerId: null, stopped: true });
 		}
 	}

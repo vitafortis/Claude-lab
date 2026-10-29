@@ -4,6 +4,7 @@
 	import { onMount, tick, untrack } from 'svelte';
 	import { ChevronDown, CircleAlert, FolderPlus, GitBranch, GitPullRequest, KeyRound, Layers, ListChecks, LoaderCircle, Radio, Rocket, SlidersHorizontal, Wand } from '@lucide/svelte';
 	import AgentBadge from '#lib/components/AgentBadge.svelte';
+	import AwsProfilePicker from '#lib/components/AwsProfilePicker.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import PageHeader from '#lib/components/PageHeader.svelte';
 	import ModelPicker from '#lib/components/ModelPicker.svelte';
@@ -43,6 +44,7 @@
 	let githubAccountId = $state('');
 	let repo = $state(initial.repo);
 	let picked = $state<GithubRepo | null>(null);
+	let awsProfileIds = $state<string[]>([]);
 	let branches = $state<string[]>([]);
 	let baseBranch = $state('');
 	let newBranch = $state('');
@@ -124,6 +126,8 @@
 		const p = profile;
 		if ((p?.id ?? null) === appliedProfile) return;
 		appliedProfile = p?.id ?? null;
+		// AWS access comes only from the repo's profile, or by hand: a different repo starts with none.
+		awsProfileIds = (p?.awsProfileIds ?? []).filter((id) => data.awsProfiles.some((a) => a.id === id));
 		if (!p || !data.accounts.some((a) => a.id === p.accountId)) return;
 		accountId = p.accountId;
 		model = p.model ?? '';
@@ -279,7 +283,8 @@
 				prompt: prompt || null,
 				model: model || null,
 				permissionMode,
-				remoteControl: rcAvailable && remoteControl
+				remoteControl: rcAvailable && remoteControl,
+				awsProfileIds
 			});
 			remember(parsed?.fullName ?? null);
 			upsertSession(s);
@@ -494,6 +499,14 @@
 				<p class="flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-xs text-warning">
 					<CircleAlert class="mt-px size-3.5 shrink-0" /><span>Skills run in Claude Code. Pick a Claude account for this session.</span>
 				</p>
+			{/if}
+			{#if data.awsProfiles.length}
+				<div>
+					<span class="label flex items-center gap-1.5"><BrandIcon brand="bedrock" class="size-3.5" />AWS <span class="font-normal text-muted-foreground/70">(optional)</span></span>
+					<AwsProfilePicker profiles={data.awsProfiles} value={awsProfileIds} onchange={(ids) => (awsProfileIds = ids)} />
+					<p class="mt-1 text-xs text-muted-foreground">Short-lived credentials for each profile's account and role, renewed while the session runs.</p>
+					{#if account?.kind === 'bedrock' && awsProfileIds.length}<p class="mt-1 text-xs text-warning">Claude on Bedrock puts AWS_REGION (and its keys, if it uses keys) in the environment, which the AWS CLI prefers to profiles: use --profile with each name.</p>{/if}
+				</div>
 			{/if}
 			<!-- Account, profile, model, permissions and Remote Control: one line until changed. -->
 			<button type="button" class="flex w-full items-center gap-2.5 rounded-lg border border-border bg-surface px-3 py-2 text-left text-[0.8125rem] transition-colors hover:bg-accent/40" aria-expanded={optionsOpen} onclick={() => (showOptions = !showOptions)}>

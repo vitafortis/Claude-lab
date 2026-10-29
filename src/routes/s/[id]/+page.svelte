@@ -34,6 +34,7 @@
 	import StateDot from '#lib/components/StateDot.svelte';
 	import Switch from '#lib/components/Switch.svelte';
 	import LinkBar from '#lib/components/LinkBar.svelte';
+	import AwsProfilePicker from '#lib/components/AwsProfilePicker.svelte';
 	import BrandIcon from '#lib/components/BrandIcon.svelte';
 	import Terminal from '#lib/components/Terminal.svelte';
 	import { api, errorMessage } from '#lib/client/api.ts';
@@ -173,6 +174,16 @@
 			toast('success', 'Saved', running ? `Applies when ${agentName} restarts.` : undefined);
 		} catch (err) {
 			toast('error', "Couldn't save", errorMessage(err));
+		}
+	}
+
+	/** AWS profiles apply at once: added ones work, removed ones stop working, no restart. */
+	async function setAws(awsProfileIds: string[]) {
+		try {
+			upsertSession(await api.patch<Session>(`/api/sessions/${s.id}`, { awsProfileIds }));
+			toast('success', 'AWS access changed', running ? 'The session has the new credentials now.' : undefined);
+		} catch (err) {
+			toast('error', "Couldn't change AWS access", errorMessage(err));
 		}
 	}
 
@@ -468,6 +479,13 @@
 							<option value="">None</option>
 						</select>
 					</div>
+					{#if data.awsProfiles.length || s.awsProfileIds.length}
+						<div>
+							<span class="label flex items-center gap-1.5"><BrandIcon brand="bedrock" class="size-3.5" />AWS</span>
+							<AwsProfilePicker profiles={data.awsProfiles} value={s.awsProfileIds} status={live?.aws ?? null} onchange={setAws} />
+							{#if account?.kind === 'bedrock' && s.awsProfileIds.length}<p class="mt-1.5 text-xs text-warning">Claude on Bedrock puts AWS_REGION (and its keys, if it uses keys) in the environment, which the AWS CLI prefers to profiles: use --profile with each name.</p>{/if}
+						</div>
+					{/if}
 					<div class="grid grid-cols-2 gap-2">
 						<div>
 							<label class="label" for="model">Model</label>

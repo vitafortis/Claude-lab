@@ -1,5 +1,5 @@
 import { BadRequest, str } from '../http.ts';
-import { getAccount, getGithubAccount } from '../store.ts';
+import { getAccount, getAwsProfile, getGithubAccount } from '../store.ts';
 import { fitPermissionMode } from '#lib/providers.ts';
 import { isValidBranch, parseRepo, repoDirName, slugify, type LaunchMode } from '#lib/launch.ts';
 import { PERMISSION_MODES, type PermissionMode, type SessionInput } from '#lib/types.ts';
@@ -23,6 +23,15 @@ export function parseName(v: unknown): string {
 	const name = v.trim().replace(/\s+/g, ' ');
 	if (name.length > 80) throw new BadRequest('Keep the name under 80 characters');
 	return name;
+}
+
+/** AWS profile ids, each one that exists. */
+export function parseAwsProfileIds(v: unknown): string[] {
+	if (v === undefined || v === null) return [];
+	if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) throw new BadRequest('AWS profiles must be a list');
+	const ids = [...new Set(v as string[])];
+	for (const id of ids) if (!getAwsProfile(id)) throw new BadRequest('That AWS profile no longer exists');
+	return ids;
 }
 
 // A slash command or skill: /code-review, /security-review, /my-plugin:skill…
@@ -78,6 +87,7 @@ export function parseSessionInput(b: Record<string, unknown>): SessionInput & { 
 		newBranch,
 		accountId,
 		githubAccountId,
+		awsProfileIds: parseAwsProfileIds(b.awsProfileIds),
 		model: parseModel(b.model),
 		permissionMode: fitPermissionMode(account.agent, parsePermissionMode(b.permissionMode)),
 		remoteControl: b.remoteControl !== false,
