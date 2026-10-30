@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import '@xterm/xterm/css/xterm.css';
 	import { LoaderCircle, Unplug } from '@lucide/svelte';
-	import { copyText } from '#lib/client/clipboard.ts';
+	import { copyText, writeClipboard } from '#lib/client/clipboard.ts';
+	import { toast } from '#lib/client/state.svelte.ts';
 
 	let {
 		path,
@@ -119,15 +120,30 @@
 			fit.fit();
 			focusTerm = () => term.focus();
 
-			// Copy from tmux / Claude Code arrives as OSC 52.
+			// Copy from tmux / Claude Code arrives as OSC 52, a moment after the mouse is released.
+			// Browsers often refuse the clipboard by then, so the text is kept for a right-click,
+			// which they allow.
+			let selected = '';
 			term.parser.registerOscHandler(52, (data) => {
 				const b64 = data.split(';').pop() ?? '';
 				try {
 					const text = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
-					if (text) void copyText(text, 'Copied from the terminal');
+					if (!text) return true;
+					selected = text;
+					void writeClipboard(text).then((ok) =>
+						ok ? toast('success', 'Copied from the terminal') : toast('info', 'Selected', 'Right-click the terminal to copy it')
+					);
 				} catch {}
 				return true;
 			});
+			// A Shift-selection is the browser's own, and its menu copies it.
+			const onContextMenu = (e: MouseEvent) => {
+				if (term.hasSelection() || !selected) return;
+				e.preventDefault();
+				e.stopPropagation();
+				void copyText(selected, 'Copied from the terminal');
+			};
+			host.addEventListener('contextmenu', onContextMenu, true);
 
 			if (new URLSearchParams(location.search).get('debug') === 'input' && term.textarea) {
 				inputLog = [`${navigator.userAgent} · ${term.cols}x${term.rows}`];
@@ -379,6 +395,7 @@
 				host.removeEventListener('touchmove', onTouchMove, true);
 				host.removeEventListener('touchend', onTouchEnd, true);
 				host.removeEventListener('touchcancel', onTouchEnd, true);
+				host.removeEventListener('contextmenu', onContextMenu, true);
 				ro.disconnect();
 				offAndroid();
 				ws?.close();

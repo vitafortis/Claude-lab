@@ -88,7 +88,9 @@ async function sweep(container: string) {
  * Attaches to the agent's tmux, first binding the wheel in tmux's history view to one line
  * per report (the browser sends one per line it scrolls; tmux's default is five) and
  * Meta+wheel-down to leaving it, which the browser sends before keys typed while scrolled
- * back. Set here rather than in tmux.conf so sessions on an older image get them too.
+ * back. Right-click does nothing in tmux, so the page can copy tmux's selection with it
+ * (Terminal.svelte) without tmux's menu opening too. Set here rather than in tmux.conf so
+ * sessions on an older image get them too.
  */
 const ATTACH = [
 	'tmux',
@@ -97,6 +99,7 @@ const ATTACH = [
 		...['bind', '-T', t, 'WheelDownPane', 'send', '-X', '-N', '1', 'scroll-down', ';'],
 		...['bind', '-T', t, 'M-WheelDownPane', 'send', '-X', 'cancel', ';']
 	]),
+	...['unbind', '-n', 'MouseDown3Pane', ';'],
 	'attach-session',
 	'-t',
 	'main'
