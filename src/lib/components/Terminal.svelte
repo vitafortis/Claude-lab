@@ -9,7 +9,8 @@
 		path,
 		autofocus = false,
 		onstate,
-		onscreen
+		onscreen,
+		turns = false
 	}: {
 		/** The WebSocket path, e.g. /ws/sessions/<id>/terminal?mode=claude. */
 		path: string;
@@ -18,6 +19,8 @@
 		onstate?: (state: 'connecting' | 'open' | 'closed') => void;
 		/** The visible lines as text, shortly after the screen changes. */
 		onscreen?: (lines: string[]) => void;
+		/** Whether the terminal is the agent's tmux, where jumpTo moves between turns. */
+		turns?: boolean;
 	} = $props();
 
 	let host: HTMLDivElement;
@@ -61,6 +64,7 @@
 	let send: (data: string) => void = () => {};
 	let forget = () => {};
 	let focusTerm: () => void = () => {};
+	let jump: (to: 'previous' | 'next' | 'latest') => void = () => {};
 
 	/** Types into the terminal as if from the keyboard. */
 	export function input(data: string) {
@@ -70,6 +74,11 @@
 
 	export function focus() {
 		focusTerm();
+	}
+
+	/** Scrolls tmux's history to the previous or next prompt you sent, or back to now. */
+	export function jumpTo(to: 'previous' | 'next' | 'latest') {
+		if (turns) jump(to);
 	}
 
 	/** Whether keystrokes reach the container right now. */
@@ -244,6 +253,26 @@
 			};
 			term.onData((d) => send(d));
 			term.onBinary((d) => send(d));
+
+			// Keys tmux knows as User0 and User1, bound to the jumps (upgrade.ts).
+			jump = (to) => {
+				if (to === 'latest') {
+					inHistory = false;
+					rest = 0;
+					raw('\x1b[<73;1;1M');
+				} else {
+					if (to === 'previous') inHistory = true;
+					raw(to === 'previous' ? '\x1b[9900~' : '\x1b[9901~');
+				}
+				focusTerm();
+			};
+			// Ctrl+Shift+Up and Down (or with Cmd) jump between turns.
+			term.attachCustomKeyEventHandler((e) => {
+				if (!turns || e.type !== 'keydown' || !e.shiftKey || !(e.ctrlKey || e.metaKey) || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return true;
+				e.preventDefault();
+				jump(e.key === 'ArrowUp' ? 'previous' : 'next');
+				return false;
+			});
 
 			// Android keyboards report every key as 229 and edit xterm's hidden textarea directly:
 			// composing words, autocorrecting, and re-editing earlier words, e.g. after the layout

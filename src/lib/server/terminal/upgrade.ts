@@ -84,6 +84,12 @@ async function sweep(container: string) {
 	await exec(container, ['bash', '-c', SWEEP, 'sweep', ...v.ttys], { user: 'node', timeoutMs: 10_000 }).catch(() => {});
 }
 
+// A prompt in Claude Code's history: "❯ text" (older versions "> text"). The input box has
+// a no-break space after its ❯, so it doesn't match.
+const PROMPT = `'^(❯|>) [^ ]'`;
+const PREVIOUS = `send -X start-of-line ; send -X search-backward ${PROMPT} ; send -X scroll-top`;
+const NEXT = `send -X cursor-down ; send -X search-forward ${PROMPT} ; send -X scroll-top`;
+
 /**
  * Attaches to the agent's tmux, first binding the wheel in tmux's history view to one line
  * per report (the browser sends one per line it scrolls; tmux's default is five) and
@@ -100,6 +106,11 @@ const ATTACH = [
 		...['bind', '-T', t, 'M-WheelDownPane', 'send', '-X', 'cancel', ';']
 	]),
 	...['unbind', '-n', 'MouseDown3Pane', ';'],
+	// Two keys of Orbital's own (Terminal.svelte jumpTo) move between the prompts you sent:
+	// back from the screen into the history, then back or forward in it, each to the top.
+	...['set', '-s', 'user-keys[0]', '\x1b[9900~', ';', 'set', '-s', 'user-keys[1]', '\x1b[9901~', ';', 'set', '-g', 'wrap-search', 'off', ';'],
+	...['bind', '-n', 'User0', `copy-mode -e ; ${PREVIOUS}`, ';'],
+	...['copy-mode', 'copy-mode-vi'].flatMap((t) => [...['bind', '-T', t, 'User0', PREVIOUS, ';'], ...['bind', '-T', t, 'User1', NEXT, ';']]),
 	'attach-session',
 	'-t',
 	'main'
